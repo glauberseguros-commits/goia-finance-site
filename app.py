@@ -6,7 +6,6 @@ from pathlib import Path
 
 DB_PATH = "bd/gofinance.db"
 Path("bd").mkdir(exist_ok=True)
-EMPRESA_ID_ATIVA = 1
 
 st.set_page_config(
     page_title="GO Finance AI",
@@ -14,47 +13,27 @@ st.set_page_config(
     layout="wide"
 )
 
-def moeda(valor):
+def formatar_moeda(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def carregar_movimentacoes():
     conn = sqlite3.connect(DB_PATH)
 
     contas_pagar = pd.read_sql_query("""
-        SELECT
-            data_vencimento AS data,
-            'Pagar' AS tipo,
-            descricao,
-            -ABS(valor) AS valor,
-            status,
-            categoria
+        SELECT data_vencimento AS data, 'Pagar' AS tipo, descricao, -valor AS valor, status, 'Compras' AS categoria
         FROM contas_pagar
-        WHERE empresa_id = ?
-    """, conn, params=(EMPRESA_ID_ATIVA,))
+        WHERE empresa_id = 1
+    """, conn)
 
     contas_receber = pd.read_sql_query("""
-        SELECT
-            data_vencimento AS data,
-            'Receber' AS tipo,
-            descricao,
-            ABS(valor) AS valor,
-            status,
-            categoria
+        SELECT data_vencimento AS data, 'Receber' AS tipo, descricao, valor, status, 'Vendas' AS categoria
         FROM contas_receber
-        WHERE empresa_id = ?
-    """, conn, params=(EMPRESA_ID_ATIVA,))
+        WHERE empresa_id = 1
+    """, conn)
 
     conn.close()
 
-    df = pd.concat([contas_receber, contas_pagar], ignore_index=True)
-
-    if df.empty:
-        return pd.DataFrame(columns=["data", "tipo", "descricao", "valor", "status", "categoria"])
-
-    df["data"] = pd.to_datetime(df["data"], errors="coerce")
-    df = df.sort_values(by=["data", "tipo"], ascending=[True, True])
-
-    return df
+    return pd.concat([contas_pagar, contas_receber], ignore_index=True)
 
 df = carregar_movimentacoes()
 
@@ -63,101 +42,127 @@ pagamentos = abs(df[df["tipo"] == "Pagar"]["valor"].sum()) if not df.empty else 
 saldo = recebimentos - pagamentos
 pendencias = len(df[df["status"] == "Pendente"]) if not df.empty else 0
 
-st.title("💰 GO Finance AI")
-st.caption("Automação Financeira Inteligente | Contas a Receber • Contas a Pagar • Conciliação • Gestão")
+st.markdown("""
+<style>
+.main-title {
+    font-size: 54px;
+    font-weight: 800;
+    line-height: 1.05;
+    color: #111827;
+}
+.subtitle {
+    font-size: 19px;
+    color: #4b5563;
+    margin-top: 16px;
+    max-width: 760px;
+}
+.badge {
+    display: inline-block;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 18px;
+}
+.card {
+    padding: 22px;
+    border: 1px solid #e5e7eb;
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+    min-height: 130px;
+}
+.card h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    color: #111827;
+}
+.card p {
+    color: #6b7280;
+    font-size: 14px;
+}
+.section-title {
+    font-size: 30px;
+    font-weight: 800;
+    margin-top: 28px;
+    margin-bottom: 12px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="badge">Automação financeira inteligente</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">GO Finance AI</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="subtitle">Plataforma para importar documentos, estruturar compras e vendas, controlar contas a pagar e receber, acompanhar processos documentais e apoiar a conciliação bancária.</div>',
+    unsafe_allow_html=True
+)
 
 st.divider()
 
-col1, col2, col3, col4 = st.columns(4)
+c1, c2, c3, c4 = st.columns(4)
 
-with col1:
-    st.metric("Recebimentos", moeda(recebimentos))
+with c1:
+    st.metric("Recebimentos", formatar_moeda(recebimentos))
 
-with col2:
-    st.metric("Pagamentos", moeda(pagamentos))
+with c2:
+    st.metric("Pagamentos", formatar_moeda(pagamentos))
 
-with col3:
-    st.metric("Saldo", moeda(saldo))
+with c3:
+    st.metric("Saldo", formatar_moeda(saldo))
 
-with col4:
+with c4:
     st.metric("Pendências", pendencias)
 
 st.divider()
 
-if df.empty:
-    st.info("Nenhuma movimentação financeira cadastrada ainda.")
-    st.caption("Versão 0.4")
-    st.stop()
+st.markdown('<div class="section-title">Módulos principais</div>', unsafe_allow_html=True)
 
-col_graf1, col_graf2 = st.columns(2)
+m1, m2, m3 = st.columns(3)
 
-with col_graf1:
+with m1:
+    st.markdown('<div class="card"><h3>📄 Importar Documento</h3><p>Entrada única para notas, comprovantes, extratos, boletos e documentos financeiros.</p></div>', unsafe_allow_html=True)
+
+with m2:
+    st.markdown('<div class="card"><h3>🔄 Conciliação Bancária</h3><p>Cruzamento entre movimentos bancários, contas a pagar e contas a receber.</p></div>', unsafe_allow_html=True)
+
+with m3:
+    st.markdown('<div class="card"><h3>📁 Processos Documentais</h3><p>Controle de pendências, evidências e encerramento financeiro por documento.</p></div>', unsafe_allow_html=True)
+
+st.divider()
+
+col_g1, col_g2 = st.columns(2)
+
+with col_g1:
     st.subheader("Recebimentos x Pagamentos")
-    resumo_tipo = df.groupby("tipo")["valor"].sum().reset_index()
-    resumo_tipo["valor"] = resumo_tipo["valor"].abs()
+    if not df.empty:
+        grafico = df.groupby("tipo", as_index=False)["valor"].sum()
+        grafico["valor"] = grafico["valor"].abs()
+        fig = px.bar(grafico, x="tipo", y="valor", text="valor")
+        fig.update_traces(texttemplate="%{text:.2f}", textposition="inside")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Sem dados financeiros.")
 
-    fig1 = px.bar(
-        resumo_tipo,
-        x="tipo",
-        y="valor",
-        text="valor",
-        title=""
-    )
-
-    fig1.update_layout(height=300)
-
-    st.plotly_chart(fig1, width="stretch")
-
-with col_graf2:
+with col_g2:
     st.subheader("Status das Movimentações")
-    resumo_status = df["status"].value_counts().reset_index()
-    resumo_status.columns = ["status", "quantidade"]
-
-    fig2 = px.pie(
-        resumo_status,
-        names="status",
-        values="quantidade",
-        hole=0.5
-    )
-
-    fig2.update_layout(height=300)
-
-    st.plotly_chart(fig2, width="stretch")
+    if not df.empty:
+        fig2 = px.pie(df, names="status", hole=0.55)
+        st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("Sem dados para status.")
 
 st.divider()
 
 st.subheader("Movimentações Financeiras")
 
-col_f1, col_f2 = st.columns(2)
+if df.empty:
+    st.info("Nenhuma movimentação cadastrada.")
+else:
+    df_show = df.copy()
+    df_show["data"] = pd.to_datetime(df_show["data"], errors="coerce").dt.strftime("%d/%m/%Y")
+    df_show["valor"] = df_show["valor"].apply(formatar_moeda)
+    st.dataframe(df_show, width="stretch", hide_index=True)
 
-with col_f1:
-    filtro_tipo = st.selectbox(
-        "Filtrar por tipo",
-        ["Todos"] + sorted(df["tipo"].dropna().unique().tolist())
-    )
-
-with col_f2:
-    filtro_status = st.selectbox(
-        "Filtrar por status",
-        ["Todos"] + sorted(df["status"].dropna().unique().tolist())
-    )
-
-df_filtrado = df.copy()
-
-if filtro_tipo != "Todos":
-    df_filtrado = df_filtrado[df_filtrado["tipo"] == filtro_tipo]
-
-if filtro_status != "Todos":
-    df_filtrado = df_filtrado[df_filtrado["status"] == filtro_status]
-
-df_exibicao = df_filtrado.copy()
-df_exibicao["data"] = df_exibicao["data"].dt.strftime("%d/%m/%Y")
-df_exibicao["valor"] = df_exibicao["valor"].apply(moeda)
-
-st.dataframe(
-    df_exibicao,
-    width="stretch",
-    hide_index=True
-)
-
-st.caption("Versão 0.4")
+st.caption("Versão 0.5 - Landing Premium")
