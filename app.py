@@ -2,8 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import sqlite3
+from pathlib import Path
 
 DB_PATH = "bd/gofinance.db"
+Path("bd").mkdir(exist_ok=True)
 EMPRESA_ID_ATIVA = 1
 
 st.set_page_config(
