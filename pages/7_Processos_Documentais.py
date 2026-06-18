@@ -221,7 +221,7 @@ if filtro_natureza != "Todos":
     df_filtrado = df_filtrado[df_filtrado["natureza"] == filtro_natureza]
 
 df_exibicao = df_filtrado.copy()
-df_exibicao["valor_total"] = df_exibicao["valor_total"].apply(moeda)
+df_exibicao["valor_total"] = df_exibicao["valor_total"].apply(formatar_moeda)
 
 df_exibicao = df_exibicao[[
     "id",
@@ -296,7 +296,7 @@ else:
         axis=1
     )
 
-    df_docs_exibicao["valor"] = pd.to_numeric(df_docs_exibicao["valor"], errors="coerce").fillna(0).apply(moeda)
+    df_docs_exibicao["valor"] = pd.to_numeric(df_docs_exibicao["valor"], errors="coerce").fillna(0).apply(formatar_moeda)
 
     df_docs_exibicao = df_docs_exibicao[[
         "id",
