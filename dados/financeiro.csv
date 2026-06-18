@@ -1,0 +1,12 @@
+data,tipo,descricao,valor,status,categoria
+2026-06-01,Receber,Cliente A,1500.0,Recebido,Vendas
+2026-06-02,Receber,Cliente B,2200.0,Pendente,Vendas
+2026-06-03,Pagar,Fornecedor X,-800.0,Pago,Fornecedores
+2026-06-04,Pagar,Internet,-120.0,Pago,Despesas
+2026-06-05,Receber,Cliente C,3500.0,Recebido,Vendas
+2026-06-06,Pagar,Aluguel,-1500.0,Pendente,Despesas
+2026-06-16,Pagar,VICTA CONTABILIDADE LTDA,-300.0,Pendente,Honorários Contábeis
+2026-06-16,Pagar,VICTA CONTABILIDADE LTDA,-300.0,Pendente,Honorários Contábeis
+2026-06-16,Pagar,VICTA CONTABILIDADE LTDA,-300.0,Pendente,Honorários Contábeis
+2026-06-16,Pagar,VICTA CONTABILIDADE LTDA,-300.0,Pendente,Honorários Contábeis
+2026-06-16,Pagar,SERVICOS & EVENTOS,-0.0,Pendente,Nota Fiscal
