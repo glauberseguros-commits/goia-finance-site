@@ -1,14 +1,34 @@
 import base64
 from pathlib import Path
+
 import pandas as pd
+import plotly.express as px
 import streamlit as st
-import streamlit.components.v1 as components
+
 
 st.set_page_config(
     page_title="GOIA Finance Platform",
     page_icon="💰",
     layout="wide"
 )
+
+
+def moeda(valor):
+    return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def carregar_logo():
+    caminhos = [
+        Path("assets/logo_goia.png"),
+        Path("imagens/LOGO GOIA.png"),
+    ]
+
+    for caminho in caminhos:
+        if caminho.exists():
+            return base64.b64encode(caminho.read_bytes()).decode()
+
+    return ""
+
 
 df = pd.read_csv("dados/financeiro.csv")
 
@@ -17,134 +37,53 @@ pagamentos = abs(df[df["tipo"] == "Pagar"]["valor"].sum())
 saldo = recebimentos - pagamentos
 pendencias = len(df[df["status"] == "Pendente"])
 
+logo_base64 = carregar_logo()
 
-def moeda(valor):
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-logo_path = Path("assets/logo_goia.png")
-if not logo_path.exists():
-    logo_path = Path("imagens/LOGO GOIA.png")
-
-logo_base64 = base64.b64encode(logo_path.read_bytes()).decode()
-
-linhas_tabela = ""
-for _, row in df.head(8).iterrows():
-    tipo = row.get("tipo", "")
-    status = row.get("status", "")
-    valor = row.get("valor", 0)
-
-    badge_tipo = "green" if tipo == "Receber" else "gray"
-    badge_status = "green" if status == "Baixada" else "yellow"
-
-    linhas_tabela += f"""
-    <tr>
-        <td>{row.get("data", "")}</td>
-        <td><span class="badge {badge_tipo}">{tipo}</span></td>
-        <td>{row.get("descricao", "")}</td>
-        <td>{row.get("categoria", "")}</td>
-        <td>{moeda(valor)}</td>
-        <td><span class="badge {badge_status}">{status}</span></td>
-    </tr>
-    """
-
-html = f"""
-<!DOCTYPE html>
-<html>
-<head>
+st.markdown("""
 <style>
-* {{
-    box-sizing: border-box;
-    font-family: Inter, Arial, sans-serif;
-}}
+[data-testid="stAppViewContainer"] {
+    background: radial-gradient(circle at top right, rgba(37,99,235,.10), transparent 28%),
+                linear-gradient(135deg, #f8fafc 0%, #f1f5ff 48%, #ffffff 100%);
+}
 
-body {{
-    margin: 0;
-    background: #f6f8ff;
-    color: #0f172a;
-}}
-
-.app {{
-    display: grid;
-    grid-template-columns: 250px 1fr;
-    min-height: 1180px;
-}}
-
-.sidebar {{
+[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #071126 0%, #0b1733 60%, #050b18 100%);
-    padding: 34px 22px;
-    color: white;
-}}
+}
 
-.sidebar img {{
-    width: 150px;
-    margin-bottom: 38px;
-}}
+[data-testid="stSidebar"] * {
+    color: #e5e7eb !important;
+}
 
-.menu-item {{
-    padding: 13px 14px;
-    border-radius: 12px;
-    margin-bottom: 8px;
-    font-size: 14px;
-    color: #e5e7eb;
-}}
+.block-container {
+    max-width: 1380px;
+    padding-top: 1.5rem;
+}
 
-.menu-item.active {{
-    background: #14285a;
-    font-weight: 800;
-}}
-
-.sidebar-card {{
-    margin-top: 80px;
-    padding: 22px;
-    border-radius: 20px;
-    background: rgba(37,99,235,.12);
-    border: 1px solid rgba(96,165,250,.25);
-}}
-
-.sidebar-card h3 {{
-    font-size: 15px;
-    margin: 14px 0 8px;
-}}
-
-.sidebar-card p {{
-    font-size: 13px;
-    color: #cbd5e1;
-    line-height: 1.45;
-}}
-
-.main {{
-    padding: 30px 42px 60px;
-    background:
-        radial-gradient(circle at top right, rgba(37,99,235,.10), transparent 28%),
-        linear-gradient(135deg, #f8fafc 0%, #f1f5ff 48%, #ffffff 100%);
-}}
-
-.topbar {{
+.topbar {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 18px;
+    gap: 16px;
     color: #475569;
     font-size: 14px;
-    margin-bottom: 24px;
-}}
+    margin-bottom: 22px;
+}
 
-.avatar {{
+.avatar {
     width: 42px;
     height: 42px;
     border-radius: 50%;
     background: #2563eb;
     color: white;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     font-weight: 900;
-}}
+}
 
-.hero {{
+.hero {
     display: grid;
-    grid-template-columns: 260px 1fr 260px;
+    grid-template-columns: 260px 1fr 240px;
     align-items: center;
     gap: 34px;
     padding: 34px 42px;
@@ -152,430 +91,286 @@ body {{
     background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(239,247,255,.92));
     border: 1px solid #e5e7eb;
     box-shadow: 0 22px 70px rgba(15,23,42,.08);
-}}
+}
 
-.hero img {{
+.hero-logo {
     width: 245px;
-}}
+}
 
-.hero h1 {{
-    margin: 0 0 10px;
+.hero-title {
     font-size: 30px;
+    font-weight: 950;
     letter-spacing: -.8px;
-}}
+    color: #0f172a;
+    margin-bottom: 10px;
+}
 
-.hero p {{
+.hero-text {
     color: #475569;
     font-size: 15px;
     line-height: 1.55;
-    margin: 0;
-}}
+}
 
-.wave {{
+.wave {
     height: 120px;
     border-radius: 20px;
     background: repeating-radial-gradient(ellipse at center, rgba(14,165,233,.35) 0 1px, transparent 2px 18px);
     opacity: .45;
-}}
+}
 
-.kpis {{
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-top: 20px;
-}}
-
-.card {{
+.card {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 24px;
     padding: 24px;
     box-shadow: 0 18px 48px rgba(15,23,42,.07);
-}}
+    min-height: 148px;
+}
 
-.kpi {{
-    display: flex;
-    gap: 18px;
-}}
-
-.icon {{
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-}}
-
-.icon.green {{ background: #dcfce7; color: #16a34a; }}
-.icon.red {{ background: #fee2e2; color: #dc2626; }}
-.icon.blue {{ background: #dbeafe; color: #2563eb; }}
-.icon.purple {{ background: #ede9fe; color: #7c3aed; }}
-
-.label {{
+.kpi-label {
     color: #475569;
     font-size: 14px;
     font-weight: 800;
-}}
+}
 
-.value {{
+.kpi-value {
+    color: #020617;
     font-size: 28px;
     font-weight: 950;
     margin-top: 6px;
-}}
+}
 
-.sub {{
+.kpi-sub {
     color: #64748b;
     font-size: 13px;
     margin-top: 4px;
-}}
+}
 
-.trend {{
+.kpi-trend {
     margin-top: 12px;
     font-size: 13px;
     font-weight: 800;
-}}
+}
 
-.positive {{ color: #16a34a; }}
-.negative {{ color: #dc2626; }}
-.purple-text {{ color: #7c3aed; }}
+.positive { color: #16a34a; }
+.negative { color: #dc2626; }
+.purple { color: #7c3aed; }
 
-.section {{
+.section-title {
     font-size: 22px;
     font-weight: 950;
+    color: #0f172a;
     margin: 26px 0 12px;
-}}
+}
 
-.modules {{
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-}}
+.module-title {
+    font-weight: 950;
+    font-size: 16px;
+    color: #0f172a;
+    margin-bottom: 8px;
+}
 
-.module {{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    min-height: 110px;
-}}
-
-.module-left {{
-    display: flex;
-    align-items: center;
-    gap: 18px;
-}}
-
-.module-title {{
-    font-weight: 900;
-    margin-bottom: 6px;
-}}
-
-.module-text {{
+.module-text {
     color: #64748b;
     font-size: 13px;
     line-height: 1.45;
-}}
+}
 
-.charts {{
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-top: 16px;
-}}
+.sidebar-card {
+    margin-top: 34px;
+    padding: 20px;
+    border-radius: 20px;
+    background: rgba(37,99,235,.12);
+    border: 1px solid rgba(96,165,250,.25);
+}
 
-.chart-title {{
-    font-size: 18px;
+.sidebar-card-title {
     font-weight: 900;
-    margin-bottom: 22px;
-}}
+    margin-top: 10px;
+}
 
-.bar-area {{
-    height: 260px;
-    display: flex;
-    align-items: end;
-    justify-content: center;
-    gap: 90px;
-    border-bottom: 1px solid #cbd5e1;
-}}
-
-.bar {{
-    width: 150px;
-    border-radius: 8px 8px 0 0;
-    position: relative;
-    text-align: center;
-    color: #64748b;
+.sidebar-card-text {
+    color: #cbd5e1 !important;
     font-size: 13px;
-}}
-
-.bar span {{
-    position: absolute;
-    top: -24px;
-    left: 0;
-    right: 0;
-}}
-
-.bar.green {{ height: 180px; background: #22c55e; }}
-.bar.red {{ height: 125px; background: #ef4444; }}
-
-.donut-wrap {{
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 60px;
-    height: 260px;
-}}
-
-.donut {{
-    width: 180px;
-    height: 180px;
-    border-radius: 50%;
-    background: conic-gradient(#2563eb 0 80%, #facc15 80% 95%, #ef4444 95% 100%);
-    position: relative;
-}}
-
-.donut::after {{
-    content: "Total\\A {len(df)}\\A movimentações";
-    white-space: pre;
-    position: absolute;
-    width: 108px;
-    height: 108px;
-    background: white;
-    border-radius: 50%;
-    top: 36px;
-    left: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: #64748b;
-    font-size: 13px;
-    line-height: 1.4;
-}}
-
-.legend div {{
-    margin-bottom: 18px;
-    font-size: 14px;
-}}
-
-.dot {{
-    display: inline-block;
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    margin-right: 10px;
-}}
-
-.dot.blue {{ background: #2563eb; }}
-.dot.yellow {{ background: #facc15; }}
-.dot.red {{ background: #ef4444; }}
-
-table {{
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 18px;
-    overflow: hidden;
-    border: 1px solid #e5e7eb;
-}}
-
-th, td {{
-    text-align: left;
-    padding: 13px 16px;
-    font-size: 14px;
-    border-bottom: 1px solid #e5e7eb;
-}}
-
-th {{
-    background: #f8fafc;
-    color: #475569;
-}}
-
-.badge {{
-    padding: 5px 9px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 800;
-}}
-
-.badge.green {{ background: #dcfce7; color: #15803d; }}
-.badge.gray {{ background: #f1f5f9; color: #334155; }}
-.badge.yellow {{ background: #fef3c7; color: #b45309; }}
-
-.footer {{
-    margin-top: 24px;
-    color: #94a3b8;
-    font-size: 13px;
-}}
+    line-height: 1.45;
+    margin-top: 8px;
+}
 </style>
-</head>
+""", unsafe_allow_html=True)
 
-<body>
-<div class="app">
 
-    <aside class="sidebar">
-        <img src="data:image/png;base64,{logo_base64}">
+with st.sidebar:
+    if logo_base64:
+        st.markdown(
+            f'<img src="data:image/png;base64,{logo_base64}" style="width:150px;margin:20px 0 34px 0;">',
+            unsafe_allow_html=True
+        )
 
-        <div class="menu-item active">⌂ Dashboard</div>
-        <div class="menu-item">⇪ Importar Documento</div>
-        <div class="menu-item">▣ Contas a Receber</div>
-        <div class="menu-item">▣ Contas a Pagar</div>
-        <div class="menu-item">🛒 Compras</div>
-        <div class="menu-item">▤ Produtos Estoque</div>
-        <div class="menu-item">▧ Vendas</div>
-        <div class="menu-item">▣ Processos Documentais</div>
-        <div class="menu-item">▥ Conciliação Bancária</div>
-        <div class="menu-item">▥ Relatórios</div>
+    st.markdown("### Dashboard")
+    st.markdown("Importar Documento")
+    st.markdown("Contas a Receber")
+    st.markdown("Contas a Pagar")
+    st.markdown("Compras")
+    st.markdown("Produtos Estoque")
+    st.markdown("Vendas")
+    st.markdown("Processos Documentais")
+    st.markdown("Conciliação Bancária")
+    st.markdown("Relatórios")
 
-        <div class="sidebar-card">
-            <div style="font-size:28px;">✦</div>
-            <h3>GOIA Finance Platform</h3>
-            <p>Automação financeira document-driven para empresas que precisam de controle, evidência e conciliação.</p>
+    st.markdown("""
+    <div class="sidebar-card">
+        <div style="font-size:28px;">✦</div>
+        <div class="sidebar-card-title">GOIA Finance Platform</div>
+        <div class="sidebar-card-text">
+        Automação financeira document-driven para empresas que precisam de controle, evidência e conciliação.
         </div>
-    </aside>
+    </div>
+    """, unsafe_allow_html=True)
 
-    <main class="main">
-        <div class="topbar">
-            <span>📅 18 de junho de 2026</span>
-            <span>🔔</span>
-            <div class="avatar">GS</div>
-            <div><b>Glauber</b><br><span style="font-size:12px;color:#64748b;">Administrador</span></div>
-        </div>
 
-        <section class="hero">
-            <img src="data:image/png;base64,{logo_base64}">
-            <div>
-                <h1>Inteligência que transforma finanças</h1>
-                <p>Automação financeira document-driven para importar documentos, estruturar compras e vendas, controlar contas a pagar e receber, acompanhar processos documentais e apoiar a conciliação bancária.</p>
-            </div>
-            <div class="wave"></div>
-        </section>
-
-        <section class="kpis">
-            <div class="card kpi">
-                <div class="icon green">↗</div>
-                <div>
-                    <div class="label">Recebimentos</div>
-                    <div class="value">{moeda(recebimentos)}</div>
-                    <div class="sub">Total de receitas</div>
-                    <div class="trend positive">↑ 12,5% vs. mês anterior</div>
-                </div>
-            </div>
-
-            <div class="card kpi">
-                <div class="icon red">↘</div>
-                <div>
-                    <div class="label">Pagamentos</div>
-                    <div class="value">{moeda(pagamentos)}</div>
-                    <div class="sub">Total de despesas</div>
-                    <div class="trend negative">↑ 8,3% vs. mês anterior</div>
-                </div>
-            </div>
-
-            <div class="card kpi">
-                <div class="icon blue">🏦</div>
-                <div>
-                    <div class="label">Saldo operacional</div>
-                    <div class="value">{moeda(saldo)}</div>
-                    <div class="sub">Resultado do período</div>
-                    <div class="trend positive">↑ 18,7% vs. mês anterior</div>
-                </div>
-            </div>
-
-            <div class="card kpi">
-                <div class="icon purple">▣</div>
-                <div>
-                    <div class="label">Pendências</div>
-                    <div class="value">{pendencias}</div>
-                    <div class="sub">Itens pendentes</div>
-                    <div class="trend purple-text">Ver detalhes →</div>
-                </div>
-            </div>
-        </section>
-
-        <div class="section">Módulos principais</div>
-
-        <section class="modules">
-            <div class="card module">
-                <div class="module-left">
-                    <div class="icon blue">📄</div>
-                    <div>
-                        <div class="module-title">Importar Documento</div>
-                        <div class="module-text">Entrada única para notas, comprovantes, boletos, extratos e documentos financeiros.</div>
-                    </div>
-                </div>
-                <div>›</div>
-            </div>
-
-            <div class="card module">
-                <div class="module-left">
-                    <div class="icon green">↻</div>
-                    <div>
-                        <div class="module-title">Conciliação Bancária</div>
-                        <div class="module-text">Cruzamento entre movimentos bancários, contas a pagar, contas a receber e comprovantes.</div>
-                    </div>
-                </div>
-                <div>›</div>
-            </div>
-
-            <div class="card module">
-                <div class="module-left">
-                    <div class="icon purple">📁</div>
-                    <div>
-                        <div class="module-title">Processos Documentais</div>
-                        <div class="module-text">Controle de pendências, evidências e encerramento financeiro por documento.</div>
-                    </div>
-                </div>
-                <div>›</div>
-            </div>
-        </section>
-
-        <section class="charts">
-            <div class="card">
-                <div class="chart-title">Recebimentos x Pagamentos</div>
-                <div class="bar-area">
-                    <div class="bar green"><span>{moeda(recebimentos)}</span></div>
-                    <div class="bar red"><span>{moeda(pagamentos)}</span></div>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="chart-title">Status das movimentações</div>
-                <div class="donut-wrap">
-                    <div class="donut"></div>
-                    <div class="legend">
-                        <div><span class="dot blue"></span>Baixada</div>
-                        <div><span class="dot yellow"></span>Pendente</div>
-                        <div><span class="dot red"></span>Cancelado</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <div class="section">Movimentações financeiras</div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Data</th>
-                    <th>Tipo</th>
-                    <th>Descrição</th>
-                    <th>Categoria</th>
-                    <th>Valor</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {linhas_tabela}
-            </tbody>
-        </table>
-
-        <div class="footer">GOIA Finance Platform · Versão 0.9</div>
-    </main>
-
+st.markdown("""
+<div class="topbar">
+    <span>📅 18 de junho de 2026</span>
+    <span>🔔</span>
+    <span class="avatar">GS</span>
+    <span><b>Glauber</b><br><span style="font-size:12px;color:#64748b;">Administrador</span></span>
 </div>
-</body>
-</html>
-"""
+""", unsafe_allow_html=True)
 
-components.html(html, height=1180, scrolling=True)
+st.markdown(f"""
+<div class="hero">
+    <div><img class="hero-logo" src="data:image/png;base64,{logo_base64}"></div>
+    <div>
+        <div class="hero-title">Inteligência que transforma finanças</div>
+        <div class="hero-text">
+        Automação financeira document-driven para importar documentos, estruturar compras e vendas,
+        controlar contas a pagar e receber, acompanhar processos documentais e apoiar a conciliação bancária.
+        </div>
+    </div>
+    <div class="wave"></div>
+</div>
+""", unsafe_allow_html=True)
+
+st.write("")
+
+c1, c2, c3, c4 = st.columns(4)
+
+with c1:
+    st.markdown(f"""
+    <div class="card">
+        <div class="kpi-label">↗ Recebimentos</div>
+        <div class="kpi-value">{moeda(recebimentos)}</div>
+        <div class="kpi-sub">Total de receitas</div>
+        <div class="kpi-trend positive">↑ 12,5% vs. mês anterior</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c2:
+    st.markdown(f"""
+    <div class="card">
+        <div class="kpi-label">↘ Pagamentos</div>
+        <div class="kpi-value">{moeda(pagamentos)}</div>
+        <div class="kpi-sub">Total de despesas</div>
+        <div class="kpi-trend negative">↑ 8,3% vs. mês anterior</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c3:
+    st.markdown(f"""
+    <div class="card">
+        <div class="kpi-label">🏦 Saldo operacional</div>
+        <div class="kpi-value">{moeda(saldo)}</div>
+        <div class="kpi-sub">Resultado do período</div>
+        <div class="kpi-trend positive">↑ 18,7% vs. mês anterior</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c4:
+    st.markdown(f"""
+    <div class="card">
+        <div class="kpi-label">▣ Pendências</div>
+        <div class="kpi-value">{pendencias}</div>
+        <div class="kpi-sub">Itens pendentes</div>
+        <div class="kpi-trend purple">Ver detalhes →</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown('<div class="section-title">Módulos principais</div>', unsafe_allow_html=True)
+
+m1, m2, m3 = st.columns(3)
+
+with m1:
+    st.markdown("""
+    <div class="card">
+        <div class="module-title">📄 Importar Documento</div>
+        <div class="module-text">Entrada única para notas, comprovantes, boletos, extratos e documentos financeiros.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with m2:
+    st.markdown("""
+    <div class="card">
+        <div class="module-title">↻ Conciliação Bancária</div>
+        <div class="module-text">Cruzamento entre movimentos bancários, contas a pagar, contas a receber e comprovantes.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with m3:
+    st.markdown("""
+    <div class="card">
+        <div class="module-title">📁 Processos Documentais</div>
+        <div class="module-text">Controle de pendências, evidências e encerramento financeiro por documento.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+g1, g2 = st.columns(2)
+
+with g1:
+    st.markdown('<div class="section-title">Recebimentos x Pagamentos</div>', unsafe_allow_html=True)
+    grafico = df.groupby("tipo", as_index=False)["valor"].sum()
+    grafico["valor"] = grafico["valor"].abs()
+
+    fig = px.bar(
+        grafico,
+        x="tipo",
+        y="valor",
+        text="valor",
+        color="tipo",
+        color_discrete_map={"Receber": "#22c55e", "Pagar": "#ef4444"}
+    )
+    fig.update_layout(
+        height=330,
+        showlegend=False,
+        margin=dict(l=10, r=10, t=10, b=10),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+    fig.update_traces(texttemplate="R$ %{text:,.2f}", textposition="outside")
+    st.plotly_chart(fig, use_container_width=True)
+
+with g2:
+    st.markdown('<div class="section-title">Status das movimentações</div>', unsafe_allow_html=True)
+    fig2 = px.pie(
+        df,
+        names="status",
+        hole=0.62,
+        color_discrete_sequence=["#2563eb", "#facc15", "#ef4444", "#22c55e"]
+    )
+    fig2.update_layout(
+        height=330,
+        margin=dict(l=10, r=10, t=10, b=10),
+        legend_title_text="",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+st.markdown('<div class="section-title">Movimentações financeiras</div>', unsafe_allow_html=True)
+
+df_show = df.copy()
+if "valor" in df_show.columns:
+    df_show["valor"] = df_show["valor"].apply(moeda)
+
+st.dataframe(df_show, use_container_width=True, hide_index=True)
+
+st.caption("GOIA Finance Platform · Versão 1.0")
