@@ -18,22 +18,16 @@ def formatar_moeda(valor):
 
 def carregar_movimentacoes():
     conn = sqlite3.connect(DB_PATH)
-
-    contas_pagar = pd.read_sql_query("""
+    pagar = pd.read_sql_query("""
         SELECT data_vencimento AS data, 'Pagar' AS tipo, descricao, -valor AS valor, status, 'Compras' AS categoria
-        FROM contas_pagar
-        WHERE empresa_id = 1
+        FROM contas_pagar WHERE empresa_id = 1
     """, conn)
-
-    contas_receber = pd.read_sql_query("""
+    receber = pd.read_sql_query("""
         SELECT data_vencimento AS data, 'Receber' AS tipo, descricao, valor, status, 'Vendas' AS categoria
-        FROM contas_receber
-        WHERE empresa_id = 1
+        FROM contas_receber WHERE empresa_id = 1
     """, conn)
-
     conn.close()
-
-    return pd.concat([contas_pagar, contas_receber], ignore_index=True)
+    return pd.concat([pagar, receber], ignore_index=True)
 
 df = carregar_movimentacoes()
 
@@ -44,125 +38,173 @@ pendencias = len(df[df["status"] == "Pendente"]) if not df.empty else 0
 
 st.markdown("""
 <style>
-.main-title {
-    font-size: 54px;
-    font-weight: 800;
-    line-height: 1.05;
-    color: #111827;
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 45%, #ffffff 100%);
 }
-.subtitle {
-    font-size: 19px;
-    color: #4b5563;
-    margin-top: 16px;
-    max-width: 760px;
+[data-testid="stSidebar"] {
+    background: #0f172a;
+}
+[data-testid="stSidebar"] * {
+    color: #e5e7eb !important;
+}
+.block-container {
+    padding-top: 3rem;
+    max-width: 1220px;
+}
+.hero {
+    padding: 46px 44px;
+    border-radius: 30px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%);
+    color: white;
+    box-shadow: 0 26px 70px rgba(15, 23, 42, 0.28);
 }
 .badge {
     display: inline-block;
-    padding: 8px 14px;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.22);
+    color: #dbeafe;
+    padding: 9px 15px;
     border-radius: 999px;
-    background: #eef2ff;
-    color: #3730a3;
-    font-weight: 700;
     font-size: 13px;
+    font-weight: 800;
     margin-bottom: 18px;
 }
-.card {
+.hero h1 {
+    font-size: 58px;
+    line-height: 1.02;
+    margin: 0 0 18px 0;
+    letter-spacing: -2px;
+}
+.hero p {
+    font-size: 20px;
+    line-height: 1.55;
+    max-width: 760px;
+    color: #dbeafe;
+}
+.cta {
+    display: inline-block;
+    margin-top: 22px;
+    padding: 14px 22px;
+    border-radius: 14px;
+    background: white;
+    color: #0f172a !important;
+    font-weight: 900;
+}
+.metric-card {
     padding: 22px;
+    background: white;
+    border-radius: 22px;
     border: 1px solid #e5e7eb;
-    border-radius: 18px;
-    background: #ffffff;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
-    min-height: 130px;
-}
-.card h3 {
-    margin: 0 0 8px 0;
-    font-size: 18px;
-    color: #111827;
-}
-.card p {
-    color: #6b7280;
-    font-size: 14px;
+    box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
 }
 .section-title {
-    font-size: 30px;
-    font-weight: 800;
-    margin-top: 28px;
-    margin-bottom: 12px;
+    font-size: 32px;
+    font-weight: 900;
+    color: #111827;
+    letter-spacing: -1px;
+}
+.feature-card {
+    padding: 26px;
+    background: white;
+    border-radius: 24px;
+    border: 1px solid #e5e7eb;
+    min-height: 190px;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.07);
+}
+.feature-card h3 {
+    font-size: 20px;
+    margin-bottom: 10px;
+}
+.feature-card p {
+    color: #64748b;
+    line-height: 1.55;
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="badge">Automação financeira inteligente</div>', unsafe_allow_html=True)
-st.markdown('<div class="main-title">GO Finance AI</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="subtitle">Plataforma para importar documentos, estruturar compras e vendas, controlar contas a pagar e receber, acompanhar processos documentais e apoiar a conciliação bancária.</div>',
-    unsafe_allow_html=True
-)
+st.markdown("""
+<div class="hero">
+    <div class="badge">GOIA • Gestão financeira document-driven</div>
+    <h1>Automação financeira com inteligência documental.</h1>
+    <p>
+        O GO Finance AI transforma documentos financeiros em contas, movimentos, processos e conciliações.
+        Uma entrada única para notas, comprovantes, boletos e extratos.
+    </p>
+    <div class="cta">Acessar demonstração operacional</div>
+</div>
+""", unsafe_allow_html=True)
 
-st.divider()
+st.write("")
+st.write("")
 
 c1, c2, c3, c4 = st.columns(4)
+for col, titulo, valor in [
+    (c1, "Recebimentos", formatar_moeda(recebimentos)),
+    (c2, "Pagamentos", formatar_moeda(pagamentos)),
+    (c3, "Saldo operacional", formatar_moeda(saldo)),
+    (c4, "Pendências", str(pendencias)),
+]:
+    with col:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div style="color:#64748b;font-size:14px;font-weight:700;">{titulo}</div>
+            <div style="font-size:30px;font-weight:900;color:#0f172a;margin-top:8px;">{valor}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-with c1:
-    st.metric("Recebimentos", formatar_moeda(recebimentos))
+st.write("")
+st.write("")
 
-with c2:
-    st.metric("Pagamentos", formatar_moeda(pagamentos))
+st.markdown('<div class="section-title">O que a plataforma entrega</div>', unsafe_allow_html=True)
 
-with c3:
-    st.metric("Saldo", formatar_moeda(saldo))
+f1, f2, f3 = st.columns(3)
 
-with c4:
-    st.metric("Pendências", pendencias)
+with f1:
+    st.markdown("""
+    <div class="feature-card">
+        <h3>📄 Importação única</h3>
+        <p>O usuário envia documentos financeiros em um único ponto. O sistema identifica, classifica e direciona para o fluxo correto.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-st.divider()
+with f2:
+    st.markdown("""
+    <div class="feature-card">
+        <h3>🔄 Conciliação bancária</h3>
+        <p>Cruzamento entre extratos, contas a pagar, contas a receber e comprovantes para reduzir baixa manual.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-st.markdown('<div class="section-title">Módulos principais</div>', unsafe_allow_html=True)
+with f3:
+    st.markdown("""
+    <div class="feature-card">
+        <h3>📁 Processo documental</h3>
+        <p>Cada operação mantém documentos, pendências, evidências e status financeiro rastreáveis.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-m1, m2, m3 = st.columns(3)
+st.write("")
+st.write("")
 
-with m1:
-    st.markdown('<div class="card"><h3>📄 Importar Documento</h3><p>Entrada única para notas, comprovantes, extratos, boletos e documentos financeiros.</p></div>', unsafe_allow_html=True)
+g1, g2 = st.columns(2)
 
-with m2:
-    st.markdown('<div class="card"><h3>🔄 Conciliação Bancária</h3><p>Cruzamento entre movimentos bancários, contas a pagar e contas a receber.</p></div>', unsafe_allow_html=True)
-
-with m3:
-    st.markdown('<div class="card"><h3>📁 Processos Documentais</h3><p>Controle de pendências, evidências e encerramento financeiro por documento.</p></div>', unsafe_allow_html=True)
-
-st.divider()
-
-col_g1, col_g2 = st.columns(2)
-
-with col_g1:
+with g1:
     st.subheader("Recebimentos x Pagamentos")
-    if not df.empty:
-        grafico = df.groupby("tipo", as_index=False)["valor"].sum()
-        grafico["valor"] = grafico["valor"].abs()
-        fig = px.bar(grafico, x="tipo", y="valor", text="valor")
-        fig.update_traces(texttemplate="%{text:.2f}", textposition="inside")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Sem dados financeiros.")
+    grafico = df.groupby("tipo", as_index=False)["valor"].sum()
+    grafico["valor"] = grafico["valor"].abs()
+    fig = px.bar(grafico, x="tipo", y="valor", text="valor")
+    fig.update_traces(texttemplate="%{text:.2f}", textposition="inside")
+    st.plotly_chart(fig, use_container_width=True)
 
-with col_g2:
-    st.subheader("Status das Movimentações")
-    if not df.empty:
-        fig2 = px.pie(df, names="status", hole=0.55)
-        st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.info("Sem dados para status.")
+with g2:
+    st.subheader("Status das movimentações")
+    fig2 = px.pie(df, names="status", hole=0.6)
+    st.plotly_chart(fig2, use_container_width=True)
 
-st.divider()
+st.subheader("Movimentações financeiras")
+df_show = df.copy()
+df_show["data"] = pd.to_datetime(df_show["data"], errors="coerce").dt.strftime("%d/%m/%Y")
+df_show["valor"] = df_show["valor"].apply(formatar_moeda)
+st.dataframe(df_show, width="stretch", hide_index=True)
 
-st.subheader("Movimentações Financeiras")
-
-if df.empty:
-    st.info("Nenhuma movimentação cadastrada.")
-else:
-    df_show = df.copy()
-    df_show["data"] = pd.to_datetime(df_show["data"], errors="coerce").dt.strftime("%d/%m/%Y")
-    df_show["valor"] = df_show["valor"].apply(formatar_moeda)
-    st.dataframe(df_show, width="stretch", hide_index=True)
-
-st.caption("Versão 0.5 - Landing Premium")
+st.caption("Versão 0.6 - Landing Comercial Premium")
