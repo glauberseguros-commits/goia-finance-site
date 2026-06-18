@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import datetime
+from utils.formatadores import formatar_data, formatar_moeda
 
 DB_PATH = "bd/gofinance.db"
 EMPRESA_ID_ATIVA = 1

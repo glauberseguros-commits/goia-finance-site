@@ -3,6 +3,7 @@ import pandas as pd
 import sqlite3
 from utils.financeiro import baixar_conta_pagar
 from datetime import datetime
+from utils.formatadores import formatar_data, formatar_moeda
 
 DB_PATH = "bd/gofinance.db"
 
