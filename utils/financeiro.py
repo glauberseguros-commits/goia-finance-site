@@ -78,6 +78,13 @@ def baixar_conta_receber(
         "receber"
     )
 
+    cur.execute("""
+        UPDATE vendas
+        SET status = 'Finalizada'
+        WHERE documento_id = ?
+          AND empresa_id = ?
+    """, (documento_id, empresa_id))
+
     conn.commit()
     conn.close()
 
@@ -154,6 +161,13 @@ def baixar_conta_pagar(
         empresa_id,
         "pagar"
     )
+
+    cur.execute("""
+        UPDATE compras
+        SET status = 'Finalizada'
+        WHERE documento_id = ?
+          AND empresa_id = ?
+    """, (documento_id, empresa_id))
 
     conn.commit()
     conn.close()
