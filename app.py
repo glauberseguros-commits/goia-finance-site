@@ -107,7 +107,7 @@ body {{
 
 .app {{
     display: grid;
-    grid-template-columns: 230px 1fr;
+    grid-template-columns: 180px 1fr;
     min-height: 100vh;
 }}
 
@@ -137,26 +137,6 @@ body {{
 .menu-item.active {{
     background: #14285a;
     font-weight: 800;
-}}
-
-.sidebar-card {{
-    margin-top: 60px;
-    padding: 20px;
-    border-radius: 20px;
-    background: rgba(37,99,235,.12);
-    border: 1px solid rgba(96,165,250,.25);
-}}
-
-.sidebar-card h3 {{
-    font-size: 15px;
-    margin: 14px 0 8px;
-    line-height: 1.2;
-}}
-
-.sidebar-card p {{
-    font-size: 13px;
-    color: #cbd5e1;
-    line-height: 1.45;
 }}
 
 .main {{
@@ -193,7 +173,7 @@ body {{
     grid-template-columns: 1fr 300px;
     align-items: center;
     gap: 34px;
-    padding: 46px 54px;
+    padding: 36px 46px;
     border-radius: 28px;
     background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(239,247,255,.92));
     border: 1px solid #e5e7eb;
@@ -683,3 +663,4 @@ th {{
 """
 
 components.html(html, height=1250, scrolling=True)
+
