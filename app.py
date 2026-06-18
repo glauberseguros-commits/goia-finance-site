@@ -19,15 +19,12 @@ def moeda(valor):
 
 
 def carregar_logo():
-    caminhos = [
+    for caminho in [
         Path("assets/logo_goia.png"),
         Path("imagens/LOGO GOIA.png"),
-    ]
-
-    for caminho in caminhos:
+    ]:
         if caminho.exists():
             return base64.b64encode(caminho.read_bytes()).decode()
-
     return ""
 
 
@@ -37,26 +34,26 @@ recebimentos = df[df["tipo"] == "Receber"]["valor"].sum()
 pagamentos = abs(df[df["tipo"] == "Pagar"]["valor"].sum())
 saldo = recebimentos - pagamentos
 pendencias = len(df[df["status"] == "Pendente"])
-
 logo_base64 = carregar_logo()
+
 
 st.markdown("""
 <style>
 [data-testid="stSidebar"],
-[data-testid="collapsedControl"] {
+[data-testid="collapsedControl"],
+[data-testid="stHeader"] {
     display: none !important;
-}
-
-[data-testid="stAppViewContainer"] {
-    background: radial-gradient(circle at top right, rgba(37,99,235,.10), transparent 28%),
-                linear-gradient(135deg, #f8fafc 0%, #f1f5ff 48%, #ffffff 100%);
 }
 
 .block-container {
     max-width: 1580px;
-    padding-top: 1.4rem;
-    padding-left: 3rem;
-    padding-right: 3rem;
+    padding: 2rem 3rem 4rem 3rem;
+}
+
+[data-testid="stAppViewContainer"] {
+    background:
+        radial-gradient(circle at top right, rgba(37,99,235,.10), transparent 28%),
+        linear-gradient(135deg, #f8fafc 0%, #f1f5ff 48%, #ffffff 100%);
 }
 
 .topbar {
@@ -68,6 +65,7 @@ st.markdown("""
 
 .top-logo {
     width: 190px;
+    display: block;
 }
 
 .top-user {
@@ -95,7 +93,7 @@ st.markdown("""
     grid-template-columns: 1fr 300px;
     align-items: center;
     gap: 34px;
-    padding: 44px 54px;
+    padding: 48px 56px;
     border-radius: 28px;
     background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(239,247,255,.92));
     border: 1px solid #e5e7eb;
@@ -103,7 +101,7 @@ st.markdown("""
 }
 
 .hero-title {
-    font-size: 36px;
+    font-size: 38px;
     font-weight: 950;
     letter-spacing: -.9px;
     color: #0f172a;
@@ -111,7 +109,7 @@ st.markdown("""
 }
 
 .hero-text {
-    max-width: 820px;
+    max-width: 850px;
     color: #475569;
     font-size: 17px;
     line-height: 1.6;
@@ -128,7 +126,7 @@ st.markdown("""
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 24px;
-    padding: 26px;
+    padding: 28px;
     box-shadow: 0 18px 48px rgba(15,23,42,.07);
     min-height: 150px;
 }
@@ -166,7 +164,7 @@ st.markdown("""
     font-size: 24px;
     font-weight: 950;
     color: #0f172a;
-    margin: 28px 0 14px;
+    margin: 30px 0 14px;
 }
 
 .module-title {
@@ -181,8 +179,15 @@ st.markdown("""
     font-size: 14px;
     line-height: 1.5;
 }
+
+div[data-testid="stDataFrame"] {
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 18px 48px rgba(15,23,42,.06);
+}
 </style>
 """, unsafe_allow_html=True)
+
 
 st.markdown(f"""
 <div class="topbar">
@@ -190,7 +195,7 @@ st.markdown(f"""
         <img class="top-logo" src="data:image/png;base64,{logo_base64}">
     </div>
     <div class="top-user">
-        <span>18 de junho de 2026</span>
+        <span>📅 18 de junho de 2026</span>
         <span>🔔</span>
         <span class="avatar">GS</span>
         <span><b>Glauber</b><br><span style="font-size:12px;color:#64748b;">Administrador</span></span>
@@ -198,18 +203,20 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+
 st.markdown("""
 <div class="hero">
     <div>
         <div class="hero-title">Inteligência que transforma finanças</div>
         <div class="hero-text">
-        Automação financeira document-driven para importar documentos, estruturar compras e vendas,
-        controlar contas a pagar e receber, acompanhar processos documentais e apoiar a conciliação bancária.
+            Automação financeira document-driven para importar documentos, estruturar compras e vendas,
+            controlar contas a pagar e receber, acompanhar processos documentais e apoiar a conciliação bancária.
         </div>
     </div>
     <div class="wave"></div>
 </div>
 """, unsafe_allow_html=True)
+
 
 st.write("")
 
@@ -255,6 +262,7 @@ with c4:
     </div>
     """, unsafe_allow_html=True)
 
+
 st.markdown('<div class="section-title">Módulos principais</div>', unsafe_allow_html=True)
 
 m1, m2, m3 = st.columns(3)
@@ -283,10 +291,12 @@ with m3:
     </div>
     """, unsafe_allow_html=True)
 
+
 g1, g2 = st.columns(2)
 
 with g1:
     st.markdown('<div class="section-title">Recebimentos x Pagamentos</div>', unsafe_allow_html=True)
+
     grafico = df.groupby("tipo", as_index=False)["valor"].sum()
     grafico["valor"] = grafico["valor"].abs()
 
@@ -310,6 +320,7 @@ with g1:
 
 with g2:
     st.markdown('<div class="section-title">Status das movimentações</div>', unsafe_allow_html=True)
+
     fig2 = px.pie(
         df,
         names="status",
@@ -324,6 +335,7 @@ with g2:
         paper_bgcolor="rgba(0,0,0,0)"
     )
     st.plotly_chart(fig2, use_container_width=True)
+
 
 st.markdown('<div class="section-title">Movimentações financeiras</div>', unsafe_allow_html=True)
 
