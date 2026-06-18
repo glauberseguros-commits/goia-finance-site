@@ -107,7 +107,7 @@ body {{
 
 .app {{
     display: grid;
-    grid-template-columns: 180px 1fr;
+    grid-template-columns: 210px 1fr;
     min-height: 100vh;
 }}
 
@@ -518,9 +518,7 @@ th {{
     <div class="menu-item">Relatórios</div>
 
     <div class="sidebar-card">
-        <div style="font-size:28px;">✦</div>
-        <h3>GOIA Finance Platform</h3>
-        <p>Automação financeira document-driven para empresas que precisam de controle, evidência e conciliação.</p>
+        
     </div>
 </aside>
 
@@ -663,4 +661,5 @@ th {{
 """
 
 components.html(html, height=1250, scrolling=True)
+
 
