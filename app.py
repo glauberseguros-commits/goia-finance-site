@@ -8,7 +8,7 @@ DB_PATH = "bd/gofinance.db"
 Path("bd").mkdir(exist_ok=True)
 
 st.set_page_config(
-    page_title="GO Finance AI",
+    page_title="GOIA",
     page_icon="💰",
     layout="wide"
 )
@@ -125,9 +125,9 @@ st.markdown("""
 st.markdown("""
 <div class="hero">
     <div class="badge">GOIA • Gestão financeira document-driven</div>
-    <h1>Automação financeira com inteligência documental.</h1>
+    <h1>INTELIGÊNCIA QUE TRANSFORMA FINANÇAS</h1>
     <p>
-        O GO Finance AI transforma documentos financeiros em contas, movimentos, processos e conciliações.
+        O GOIA transforma documentos financeiros em contas, movimentos, processos e conciliações.
         Uma entrada única para notas, comprovantes, boletos e extratos.
     </p>
     <div class="cta">Acessar demonstração operacional</div>
@@ -208,3 +208,4 @@ df_show["valor"] = df_show["valor"].apply(formatar_moeda)
 st.dataframe(df_show, width="stretch", hide_index=True)
 
 st.caption("Versão 0.6 - Landing Comercial Premium")
+
