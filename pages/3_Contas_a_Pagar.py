@@ -116,7 +116,7 @@ df_exibicao["valor"] = df_exibicao["valor"].apply(moeda)
 
 for col in ["data_emissao", "data_vencimento", "criado_em"]:
     if col in df_exibicao.columns:
-        df_exibicao[col] = df_exibicao[col].fillna("")
+        df_exibicao[col] = df_exibicao[col].fillna("").apply(formatar_data)
 
 df_exibicao = df_exibicao[[
     "id",
