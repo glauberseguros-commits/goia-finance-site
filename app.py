@@ -19,7 +19,10 @@ def moeda(valor):
 
 
 def carregar_logo():
-    for caminho in [Path("assets/logo_goia.png"), Path("imagens/LOGO GOIA.png")]:
+    for caminho in [
+        Path("assets/logo_goia.png"),
+        Path("imagens/LOGO GOIA.png")
+    ]:
         if caminho.exists():
             return base64.b64encode(caminho.read_bytes()).decode()
     return ""
@@ -37,18 +40,30 @@ logo_base64 = carregar_logo()
 
 linhas = ""
 for _, row in df.head(10).iterrows():
-    valor = moeda(row["valor"])
-    tipo = row["tipo"]
-    status = row["status"]
+    tipo = row.get("tipo", "")
+    status = row.get("status", "")
+    valor = moeda(row.get("valor", 0))
+
+    classe_tipo = "tipo-receber" if tipo == "Receber" else "tipo-pagar"
+
+    status_normalizado = str(status).lower()
+    if "receb" in status_normalizado or "baix" in status_normalizado:
+        classe_status = "status-ok"
+    elif "pend" in status_normalizado:
+        classe_status = "status-pendente"
+    elif "pago" in status_normalizado:
+        classe_status = "status-pago"
+    else:
+        classe_status = "status-neutro"
 
     linhas += f"""
     <tr>
         <td>{row.get("data", "")}</td>
-        <td>{tipo}</td>
+        <td><span class="badge {classe_tipo}">{tipo}</span></td>
         <td>{row.get("descricao", "")}</td>
         <td>{row.get("categoria", "")}</td>
-        <td>{valor}</td>
-        <td>{status}</td>
+        <td class="valor">{valor}</td>
+        <td><span class="badge {classe_status}">{status}</span></td>
     </tr>
     """
 
@@ -65,6 +80,10 @@ st.markdown("""
 .block-container {
     padding: 0 !important;
     max-width: 100% !important;
+}
+
+iframe {
+    display: block;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -88,25 +107,29 @@ body {{
 
 .app {{
     display: grid;
-    grid-template-columns: 250px 1fr;
+    grid-template-columns: 230px 1fr;
     min-height: 100vh;
 }}
 
 .sidebar {{
     background: linear-gradient(180deg, #071126 0%, #0b1733 60%, #050b18 100%);
-    padding: 34px 22px;
+    padding: 28px 18px;
     color: white;
 }}
 
+.logo-box {{
+    padding: 0 0 34px;
+}}
+
 .logo {{
-    width: 150px;
-    margin-bottom: 42px;
+    width: 138px;
+    display: block;
 }}
 
 .menu-item {{
-    padding: 14px 16px;
+    padding: 13px 14px;
     border-radius: 13px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     font-size: 14px;
     color: #e5e7eb;
 }}
@@ -117,8 +140,8 @@ body {{
 }}
 
 .sidebar-card {{
-    margin-top: 76px;
-    padding: 22px;
+    margin-top: 60px;
+    padding: 20px;
     border-radius: 20px;
     background: rgba(37,99,235,.12);
     border: 1px solid rgba(96,165,250,.25);
@@ -127,6 +150,7 @@ body {{
 .sidebar-card h3 {{
     font-size: 15px;
     margin: 14px 0 8px;
+    line-height: 1.2;
 }}
 
 .sidebar-card p {{
@@ -136,9 +160,9 @@ body {{
 }}
 
 .main {{
-    padding: 30px 42px 60px;
+    padding: 26px 38px 52px;
     background:
-        radial-gradient(circle at top right, rgba(37,99,235,.10), transparent 28%),
+        radial-gradient(circle at top right, rgba(37,99,235,.12), transparent 28%),
         linear-gradient(135deg, #f8fafc 0%, #f1f5ff 48%, #ffffff 100%);
 }}
 
@@ -171,24 +195,24 @@ body {{
     gap: 34px;
     padding: 46px 54px;
     border-radius: 28px;
-    background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(239,247,255,.92));
+    background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(239,247,255,.92));
     border: 1px solid #e5e7eb;
     box-shadow: 0 22px 70px rgba(15,23,42,.08);
 }}
 
 .hero h1 {{
     margin: 0 0 14px;
-    font-size: 36px;
-    line-height: 1.1;
+    font-size: 38px;
+    line-height: 1.08;
     letter-spacing: -.9px;
 }}
 
 .hero p {{
-    max-width: 860px;
+    max-width: 900px;
     margin: 0;
     color: #475569;
-    font-size: 16px;
-    line-height: 1.6;
+    font-size: 16.5px;
+    line-height: 1.65;
 }}
 
 .wave {{
@@ -211,6 +235,45 @@ body {{
     border-radius: 24px;
     padding: 26px;
     box-shadow: 0 18px 48px rgba(15,23,42,.07);
+}}
+
+.kpi-card {{
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    gap: 16px;
+    align-items: start;
+    min-height: 152px;
+}}
+
+.icon {{
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 900;
+}}
+
+.icon.green {{
+    background: #dcfce7;
+    color: #16a34a;
+}}
+
+.icon.red {{
+    background: #fee2e2;
+    color: #dc2626;
+}}
+
+.icon.blue {{
+    background: #dbeafe;
+    color: #2563eb;
+}}
+
+.icon.purple {{
+    background: #ede9fe;
+    color: #7c3aed;
 }}
 
 .kpi-label {{
@@ -238,20 +301,28 @@ body {{
     font-weight: 800;
 }}
 
-.green {{ color: #16a34a; }}
-.red {{ color: #dc2626; }}
-.purple {{ color: #7c3aed; }}
+.green-text {{ color: #16a34a; }}
+.red-text {{ color: #dc2626; }}
+.purple-text {{ color: #7c3aed; }}
 
 .section-title {{
-    font-size: 22px;
+    font-size: 23px;
     font-weight: 950;
-    margin: 28px 0 14px;
+    margin: 26px 0 14px;
 }}
 
 .modules {{
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
+}}
+
+.module-card {{
+    display: grid;
+    grid-template-columns: 54px 1fr 20px;
+    gap: 16px;
+    align-items: center;
+    min-height: 108px;
 }}
 
 .module-title {{
@@ -262,8 +333,13 @@ body {{
 
 .module-text {{
     color: #64748b;
-    font-size: 14px;
+    font-size: 13.5px;
     line-height: 1.5;
+}}
+
+.arrow {{
+    color: #64748b;
+    font-size: 24px;
 }}
 
 .charts {{
@@ -274,15 +350,21 @@ body {{
 }}
 
 .chart {{
-    min-height: 280px;
+    min-height: 300px;
+}}
+
+.chart-title {{
+    font-size: 20px;
+    font-weight: 950;
+    margin-bottom: 20px;
 }}
 
 .bar-area {{
-    height: 220px;
+    height: 225px;
     display: flex;
     align-items: end;
     justify-content: center;
-    gap: 90px;
+    gap: 92px;
     border-bottom: 1px solid #cbd5e1;
 }}
 
@@ -317,7 +399,7 @@ body {{
     align-items: center;
     justify-content: center;
     gap: 70px;
-    height: 220px;
+    height: 225px;
 }}
 
 .donut {{
@@ -352,6 +434,18 @@ body {{
     font-size: 14px;
 }}
 
+.dot {{
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 10px;
+}}
+
+.dot.blue {{ background: #4f46e5; }}
+.dot.yellow {{ background: #facc15; }}
+.dot.red {{ background: #ef4444; }}
+
 table {{
     width: 100%;
     border-collapse: collapse;
@@ -371,6 +465,49 @@ th, td {{
 th {{
     background: #f8fafc;
     color: #475569;
+    font-weight: 800;
+}}
+
+.valor {{
+    font-weight: 800;
+}}
+
+.badge {{
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+}}
+
+.tipo-receber {{
+    background: #dcfce7;
+    color: #15803d;
+}}
+
+.tipo-pagar {{
+    background: #e2e8f0;
+    color: #334155;
+}}
+
+.status-ok {{
+    background: #dcfce7;
+    color: #15803d;
+}}
+
+.status-pendente {{
+    background: #fef3c7;
+    color: #b45309;
+}}
+
+.status-pago {{
+    background: #dbeafe;
+    color: #1d4ed8;
+}}
+
+.status-neutro {{
+    background: #f1f5f9;
+    color: #334155;
 }}
 
 .footer {{
@@ -385,7 +522,9 @@ th {{
 <div class="app">
 
 <aside class="sidebar">
-    <img class="logo" src="data:image/png;base64,{logo_base64}">
+    <div class="logo-box">
+        <img class="logo" src="data:image/png;base64,{logo_base64}">
+    </div>
 
     <div class="menu-item active">Dashboard</div>
     <div class="menu-item">Importar Documento</div>
@@ -423,55 +562,81 @@ th {{
     </section>
 
     <section class="kpis">
-        <div class="card">
-            <div class="kpi-label">Recebimentos</div>
-            <div class="kpi-value">{moeda(recebimentos)}</div>
-            <div class="kpi-sub">Total de receitas</div>
-            <div class="trend green">↑ 12,5% vs. mês anterior</div>
+        <div class="card kpi-card">
+            <div class="icon green">↗</div>
+            <div>
+                <div class="kpi-label">Recebimentos</div>
+                <div class="kpi-value">{moeda(recebimentos)}</div>
+                <div class="kpi-sub">Total de receitas</div>
+                <div class="trend green-text">↑ 12,5% vs. mês anterior</div>
+            </div>
         </div>
 
-        <div class="card">
-            <div class="kpi-label">Pagamentos</div>
-            <div class="kpi-value">{moeda(pagamentos)}</div>
-            <div class="kpi-sub">Total de despesas</div>
-            <div class="trend red">↑ 8,3% vs. mês anterior</div>
+        <div class="card kpi-card">
+            <div class="icon red">↘</div>
+            <div>
+                <div class="kpi-label">Pagamentos</div>
+                <div class="kpi-value">{moeda(pagamentos)}</div>
+                <div class="kpi-sub">Total de despesas</div>
+                <div class="trend red-text">↑ 8,3% vs. mês anterior</div>
+            </div>
         </div>
 
-        <div class="card">
-            <div class="kpi-label">Saldo operacional</div>
-            <div class="kpi-value">{moeda(saldo)}</div>
-            <div class="kpi-sub">Resultado do período</div>
-            <div class="trend green">↑ 18,7% vs. mês anterior</div>
+        <div class="card kpi-card">
+            <div class="icon blue">▦</div>
+            <div>
+                <div class="kpi-label">Saldo operacional</div>
+                <div class="kpi-value">{moeda(saldo)}</div>
+                <div class="kpi-sub">Resultado do período</div>
+                <div class="trend green-text">↑ 18,7% vs. mês anterior</div>
+            </div>
         </div>
 
-        <div class="card">
-            <div class="kpi-label">Pendências</div>
-            <div class="kpi-value">{pendencias}</div>
-            <div class="kpi-sub">Itens pendentes</div>
-            <div class="trend purple">Ver detalhes →</div>
+        <div class="card kpi-card">
+            <div class="icon purple">▣</div>
+            <div>
+                <div class="kpi-label">Pendências</div>
+                <div class="kpi-value">{pendencias}</div>
+                <div class="kpi-sub">Itens pendentes</div>
+                <div class="trend purple-text">Ver detalhes →</div>
+            </div>
         </div>
     </section>
 
     <div class="section-title">Módulos principais</div>
 
     <section class="modules">
-        <div class="card">
-            <div class="module-title">Importar Documento</div>
-            <div class="module-text">Entrada única para notas, comprovantes, boletos, extratos e documentos financeiros.</div>
+        <div class="card module-card">
+            <div class="icon blue">▤</div>
+            <div>
+                <div class="module-title">Importar Documento</div>
+                <div class="module-text">Entrada única para notas, comprovantes, boletos, extratos e documentos financeiros.</div>
+            </div>
+            <div class="arrow">›</div>
         </div>
-        <div class="card">
-            <div class="module-title">Conciliação Bancária</div>
-            <div class="module-text">Cruzamento entre movimentos bancários, contas a pagar, contas a receber e comprovantes.</div>
+
+        <div class="card module-card">
+            <div class="icon green">↻</div>
+            <div>
+                <div class="module-title">Conciliação Bancária</div>
+                <div class="module-text">Cruzamento entre movimentos bancários, contas a pagar, contas a receber e comprovantes.</div>
+            </div>
+            <div class="arrow">›</div>
         </div>
-        <div class="card">
-            <div class="module-title">Processos Documentais</div>
-            <div class="module-text">Controle de pendências, evidências e encerramento financeiro por documento.</div>
+
+        <div class="card module-card">
+            <div class="icon purple">▭</div>
+            <div>
+                <div class="module-title">Processos Documentais</div>
+                <div class="module-text">Controle de pendências, evidências e encerramento financeiro por documento.</div>
+            </div>
+            <div class="arrow">›</div>
         </div>
     </section>
 
     <section class="charts">
         <div class="card chart">
-            <div class="section-title" style="margin-top:0;">Recebimentos x Pagamentos</div>
+            <div class="chart-title">Recebimentos x Pagamentos</div>
             <div class="bar-area">
                 <div class="bar greenbar"><span>{moeda(recebimentos)}</span></div>
                 <div class="bar redbar"><span>{moeda(pagamentos)}</span></div>
@@ -479,13 +644,13 @@ th {{
         </div>
 
         <div class="card chart">
-            <div class="section-title" style="margin-top:0;">Status das movimentações</div>
+            <div class="chart-title">Status das movimentações</div>
             <div class="donut-wrap">
                 <div class="donut"></div>
                 <div class="legend">
-                    <div>● Baixada</div>
-                    <div>● Pendente</div>
-                    <div>● Cancelado</div>
+                    <div><span class="dot blue"></span>Baixada</div>
+                    <div><span class="dot yellow"></span>Pendente</div>
+                    <div><span class="dot red"></span>Cancelado</div>
                 </div>
             </div>
         </div>
@@ -509,7 +674,7 @@ th {{
         </tbody>
     </table>
 
-    <div class="footer">GOIA Finance Platform · Versão 1.2</div>
+    <div class="footer">GOIA Finance Platform · Versão 1.3 · Dia 2</div>
 
 </main>
 </div>
@@ -517,4 +682,4 @@ th {{
 </html>
 """
 
-components.html(html, height=1200, scrolling=True)
+components.html(html, height=1250, scrolling=True)
