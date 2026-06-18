@@ -9,7 +9,8 @@ import streamlit as st
 st.set_page_config(
     page_title="GOIA Finance Platform",
     page_icon="💰",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 
@@ -41,32 +42,40 @@ logo_base64 = carregar_logo()
 
 st.markdown("""
 <style>
+[data-testid="stSidebar"],
+[data-testid="collapsedControl"] {
+    display: none !important;
+}
+
 [data-testid="stAppViewContainer"] {
     background: radial-gradient(circle at top right, rgba(37,99,235,.10), transparent 28%),
                 linear-gradient(135deg, #f8fafc 0%, #f1f5ff 48%, #ffffff 100%);
 }
 
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #071126 0%, #0b1733 60%, #050b18 100%);
-}
-
-[data-testid="stSidebar"] * {
-    color: #e5e7eb !important;
-}
-
 .block-container {
-    max-width: 1380px;
-    padding-top: 1.5rem;
+    max-width: 1580px;
+    padding-top: 1.4rem;
+    padding-left: 3rem;
+    padding-right: 3rem;
 }
 
 .topbar {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 26px;
+}
+
+.top-logo {
+    width: 190px;
+}
+
+.top-user {
+    display: flex;
     align-items: center;
     gap: 16px;
     color: #475569;
     font-size: 14px;
-    margin-bottom: 22px;
 }
 
 .avatar {
@@ -83,36 +92,33 @@ st.markdown("""
 
 .hero {
     display: grid;
-    grid-template-columns: 260px 1fr 240px;
+    grid-template-columns: 1fr 300px;
     align-items: center;
     gap: 34px;
-    padding: 34px 42px;
-    border-radius: 26px;
+    padding: 44px 54px;
+    border-radius: 28px;
     background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(239,247,255,.92));
     border: 1px solid #e5e7eb;
     box-shadow: 0 22px 70px rgba(15,23,42,.08);
 }
 
-.hero-logo {
-    width: 245px;
-}
-
 .hero-title {
-    font-size: 30px;
+    font-size: 36px;
     font-weight: 950;
-    letter-spacing: -.8px;
+    letter-spacing: -.9px;
     color: #0f172a;
-    margin-bottom: 10px;
+    margin-bottom: 16px;
 }
 
 .hero-text {
+    max-width: 820px;
     color: #475569;
-    font-size: 15px;
-    line-height: 1.55;
+    font-size: 17px;
+    line-height: 1.6;
 }
 
 .wave {
-    height: 120px;
+    height: 150px;
     border-radius: 20px;
     background: repeating-radial-gradient(ellipse at center, rgba(14,165,233,.35) 0 1px, transparent 2px 18px);
     opacity: .45;
@@ -122,33 +128,33 @@ st.markdown("""
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 24px;
-    padding: 24px;
+    padding: 26px;
     box-shadow: 0 18px 48px rgba(15,23,42,.07);
-    min-height: 148px;
+    min-height: 150px;
 }
 
 .kpi-label {
     color: #475569;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 800;
 }
 
 .kpi-value {
     color: #020617;
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 950;
-    margin-top: 6px;
+    margin-top: 8px;
 }
 
 .kpi-sub {
     color: #64748b;
-    font-size: 13px;
-    margin-top: 4px;
+    font-size: 14px;
+    margin-top: 6px;
 }
 
 .kpi-trend {
-    margin-top: 12px;
-    font-size: 13px;
+    margin-top: 14px;
+    font-size: 14px;
     font-weight: 800;
 }
 
@@ -157,89 +163,43 @@ st.markdown("""
 .purple { color: #7c3aed; }
 
 .section-title {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 950;
     color: #0f172a;
-    margin: 26px 0 12px;
+    margin: 28px 0 14px;
 }
 
 .module-title {
     font-weight: 950;
-    font-size: 16px;
+    font-size: 17px;
     color: #0f172a;
     margin-bottom: 8px;
 }
 
 .module-text {
     color: #64748b;
-    font-size: 13px;
-    line-height: 1.45;
-}
-
-.sidebar-card {
-    margin-top: 34px;
-    padding: 20px;
-    border-radius: 20px;
-    background: rgba(37,99,235,.12);
-    border: 1px solid rgba(96,165,250,.25);
-}
-
-.sidebar-card-title {
-    font-weight: 900;
-    margin-top: 10px;
-}
-
-.sidebar-card-text {
-    color: #cbd5e1 !important;
-    font-size: 13px;
-    line-height: 1.45;
-    margin-top: 8px;
+    font-size: 14px;
+    line-height: 1.5;
 }
 </style>
 """, unsafe_allow_html=True)
 
-
-with st.sidebar:
-    if logo_base64:
-        st.markdown(
-            f'<img src="data:image/png;base64,{logo_base64}" style="width:150px;margin:20px 0 34px 0;">',
-            unsafe_allow_html=True
-        )
-
-    st.markdown("### Dashboard")
-    st.markdown("Importar Documento")
-    st.markdown("Contas a Receber")
-    st.markdown("Contas a Pagar")
-    st.markdown("Compras")
-    st.markdown("Produtos Estoque")
-    st.markdown("Vendas")
-    st.markdown("Processos Documentais")
-    st.markdown("Conciliação Bancária")
-    st.markdown("Relatórios")
-
-    st.markdown("""
-    <div class="sidebar-card">
-        <div style="font-size:28px;">✦</div>
-        <div class="sidebar-card-title">GOIA Finance Platform</div>
-        <div class="sidebar-card-text">
-        Automação financeira document-driven para empresas que precisam de controle, evidência e conciliação.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-st.markdown("""
+st.markdown(f"""
 <div class="topbar">
-    <span>📅 18 de junho de 2026</span>
-    <span>🔔</span>
-    <span class="avatar">GS</span>
-    <span><b>Glauber</b><br><span style="font-size:12px;color:#64748b;">Administrador</span></span>
+    <div>
+        <img class="top-logo" src="data:image/png;base64,{logo_base64}">
+    </div>
+    <div class="top-user">
+        <span>18 de junho de 2026</span>
+        <span>🔔</span>
+        <span class="avatar">GS</span>
+        <span><b>Glauber</b><br><span style="font-size:12px;color:#64748b;">Administrador</span></span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown(f"""
+st.markdown("""
 <div class="hero">
-    <div><img class="hero-logo" src="data:image/png;base64,{logo_base64}"></div>
     <div>
         <div class="hero-title">Inteligência que transforma finanças</div>
         <div class="hero-text">
@@ -339,7 +299,7 @@ with g1:
         color_discrete_map={"Receber": "#22c55e", "Pagar": "#ef4444"}
     )
     fig.update_layout(
-        height=330,
+        height=360,
         showlegend=False,
         margin=dict(l=10, r=10, t=10, b=10),
         plot_bgcolor="rgba(0,0,0,0)",
@@ -357,7 +317,7 @@ with g2:
         color_discrete_sequence=["#2563eb", "#facc15", "#ef4444", "#22c55e"]
     )
     fig2.update_layout(
-        height=330,
+        height=360,
         margin=dict(l=10, r=10, t=10, b=10),
         legend_title_text="",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -368,9 +328,8 @@ with g2:
 st.markdown('<div class="section-title">Movimentações financeiras</div>', unsafe_allow_html=True)
 
 df_show = df.copy()
-if "valor" in df_show.columns:
-    df_show["valor"] = df_show["valor"].apply(moeda)
+df_show["valor"] = df_show["valor"].apply(moeda)
 
 st.dataframe(df_show, use_container_width=True, hide_index=True)
 
-st.caption("GOIA Finance Platform · Versão 1.0")
+st.caption("GOIA Finance Platform · Versão 1.1")
