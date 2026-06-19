@@ -168,6 +168,20 @@ df["valor_total"] = pd.to_numeric(df["valor_total"], errors="coerce").fillna(0)
 df["total_pendencias"] = pd.to_numeric(df["total_pendencias"], errors="coerce").fillna(0)
 df["pendencias_abertas"] = pd.to_numeric(df["pendencias_abertas"], errors="coerce").fillna(0)
 
+def calcular_situacao_goia(row):
+    pendencias = int(row.get("pendencias_abertas", 0) or 0)
+    status = str(row.get("status", ""))
+
+    if pendencias > 0:
+        return f"⚠️ Pendente: {pendencias} documento(s)"
+
+    if status == "Concluído":
+        return "✅ Processo completo"
+
+    return "🟡 Aguardando validação"
+
+df["situacao_goia"] = df.apply(calcular_situacao_goia, axis=1)
+
 total_processos = len(df)
 processos_abertos = len(df[df["status"] == "Aberto"])
 pendencias_abertas = int(df["pendencias_abertas"].sum())
@@ -232,6 +246,7 @@ df_exibicao = df_exibicao[[
     "contraparte_nome",
     "valor_total",
     "status",
+    "situacao_goia",
     "pendencias_abertas",
     "proxima_acao"
 ]]
@@ -245,6 +260,7 @@ df_exibicao = df_exibicao.rename(columns={
     "contraparte_nome": "Contraparte",
     "valor_total": "Valor",
     "status": "Status",
+    "situacao_goia": "Situação GOIA",
     "pendencias_abertas": "Pendências abertas",
     "proxima_acao": "Próxima ação"
 })
