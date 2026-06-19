@@ -32,6 +32,14 @@ def moeda(valor):
     except:
         return "R$ 0,00"
 
+def data_br(valor):
+    if valor is None or valor == "":
+        return ""
+    try:
+        return pd.to_datetime(valor).strftime("%d/%m/%Y")
+    except:
+        return valor
+
 def carregar_movimentacoes():
     conn = conectar()
 
@@ -206,6 +214,7 @@ if df.empty:
     st.info("Nenhuma movimentação financeira encontrada. Importe o primeiro documento para iniciar.")
 else:
     df_view = df.copy()
+    df_view["data"] = df_view["data"].apply(data_br)
     df_view["valor"] = df_view["valor"].apply(moeda)
     st.dataframe(df_view, use_container_width=True, hide_index=True)
 
