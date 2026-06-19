@@ -165,17 +165,25 @@ def classificar_tipo_documento(texto):
     if "CADASTRO NACIONAL DA PESSOA JURÍDICA" in t:
         return "Cartão CNPJ"
 
+    # NF-e / DANFE tem prioridade sobre empenho.
+    # Uma NF-e pode citar nota de empenho nas informações complementares.
+    if (
+        "DANFE" in t
+        or "NF-E" in t
+        or "NFE" in t
+        or "NOTA FISCAL" in t
+        or "NOTA FISCAL ELETRONICA" in t
+        or "NOTA FISCAL ELETRÔNICA" in t
+        or "CHAVE DE ACESSO" in t
+    ):
+        return "Nota Fiscal"
+
     if (
         "NOTA DE EMPENHO" in t
         or "EMPENHO" in t
         or "NE00" in t
     ):
         return "Nota de Empenho"
-
-    if "NOTA FISCAL" in t or "DANFE" in t or "NF-E" in t or "NFE" in t:
-        if CNPJ_EMPRESA in texto:
-            # Regra provisória: se a empresa aparece no documento, usuário confirma direção.
-            return "Nota Fiscal"
         return "Nota Fiscal"
 
     return "A classificar"
