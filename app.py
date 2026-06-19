@@ -2,6 +2,7 @@ import base64
 from pathlib import Path
 
 import pandas as pd
+import sqlite3
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -26,6 +27,59 @@ def carregar_logo():
         if caminho.exists():
             return base64.b64encode(caminho.read_bytes()).decode()
     return ""
+
+
+
+def buscar_ultimo_documento():
+    try:
+        conn = sqlite3.connect("bd/gofinance.db")
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT
+                id,
+                tipo_documento,
+                direcao,
+                nome_emitente,
+                nome_destinatario,
+                valor,
+                status_processamento,
+                numero_nfe,
+                serie_nfe,
+                data_emissao
+            FROM documentos
+            WHERE empresa_id = 1
+            ORDER BY id DESC
+            LIMIT 1
+        """)
+
+        doc = cur.fetchone()
+
+        if not doc:
+            conn.close()
+            return None
+
+        cur.execute("""
+            SELECT COUNT(*) AS total
+            FROM processo_pendencias
+            WHERE empresa_id = 1
+              AND processo_id IN (
+                  SELECT processo_id
+                  FROM processo_documentos
+                  WHERE documento_id = ?
+                    AND empresa_id = 1
+              )
+        """, (doc["id"],))
+
+        pendencias_doc = cur.fetchone()["total"]
+
+        conn.close()
+
+        return dict(doc) | {"pendencias_doc": pendencias_doc}
+
+    except Exception:
+        return None
 
 
 df = pd.read_csv("dados/financeiro.csv")
@@ -87,6 +141,80 @@ iframe {
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+
+ultimo_documento = buscar_ultimo_documento()
+
+if ultimo_documento:
+    numero = ultimo_documento.get("numero_nfe") or ultimo_documento.get("id")
+    serie = ultimo_documento.get("serie_nfe") or ""
+    direcao_doc = ultimo_documento.get("direcao") or "Documento financeiro"
+    tipo_doc = ultimo_documento.get("tipo_documento") or "Documento"
+    valor_doc = moeda(ultimo_documento.get("valor") or 0)
+    status_doc = ultimo_documento.get("status_processamento") or "Processado"
+    pend_doc = ultimo_documento.get("pendencias_doc") or 0
+
+    if "Venda" in direcao_doc:
+        parte_doc = ultimo_documento.get("nome_destinatario") or "Cliente identificado"
+        acao_doc = "Conta a receber criada"
+    elif "Compra" in direcao_doc or "Despesa" in direcao_doc:
+        parte_doc = ultimo_documento.get("nome_emitente") or "Fornecedor identificado"
+        acao_doc = "Conta a pagar criada"
+    else:
+        parte_doc = ultimo_documento.get("nome_emitente") or ultimo_documento.get("nome_destinatario") or "Contraparte identificada"
+        acao_doc = "Documento salvo para análise"
+
+    titulo_doc = f"{tipo_doc} {numero}"
+    if serie:
+        titulo_doc += f" · Série {serie}"
+
+    doc_html = f"""
+    <section class="doc-intel">
+        <div>
+            <div class="eyebrow">Inteligência documental</div>
+            <h2>{titulo_doc}</h2>
+            <p>{parte_doc}</p>
+        </div>
+
+        <div class="doc-kpis">
+            <div>
+                <span>Valor identificado</span>
+                <strong>{valor_doc}</strong>
+            </div>
+            <div>
+                <span>Classificação</span>
+                <strong>{direcao_doc}</strong>
+            </div>
+            <div>
+                <span>Status</span>
+                <strong>{status_doc}</strong>
+            </div>
+            <div>
+                <span>Pendências</span>
+                <strong>{pend_doc}</strong>
+            </div>
+        </div>
+
+        <div class="doc-flow">
+            <div>PDF recebido</div>
+            <div>Texto extraído</div>
+            <div>Documento classificado</div>
+            <div>{acao_doc}</div>
+            <div>Processo documental criado</div>
+        </div>
+    </section>
+    """
+else:
+    doc_html = """
+    <section class="doc-intel">
+        <div>
+            <div class="eyebrow">Inteligência documental</div>
+            <h2>Nenhum documento processado ainda</h2>
+            <p>Importe uma NF-e, boleto, comprovante ou extrato para iniciar o fluxo document-driven.</p>
+        </div>
+    </section>
+    """
 
 
 html = f"""
@@ -320,6 +448,81 @@ body {{
 .arrow {{
     color: #64748b;
     font-size: 24px;
+}}
+
+
+.doc-intel {{
+    margin-top: 18px;
+    padding: 26px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, #ffffff, #f8fbff);
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 18px 48px rgba(15,23,42,.07);
+}}
+
+.doc-intel .eyebrow {{
+    color: #2563eb;
+    font-size: 13px;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-bottom: 8px;
+}}
+
+.doc-intel h2 {{
+    margin: 0;
+    font-size: 24px;
+    letter-spacing: -.4px;
+}}
+
+.doc-intel p {{
+    margin: 8px 0 0;
+    color: #64748b;
+    font-size: 14px;
+}}
+
+.doc-kpis {{
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-top: 22px;
+}}
+
+.doc-kpis div {{
+    padding: 16px;
+    border-radius: 18px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+}}
+
+.doc-kpis span {{
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}}
+
+.doc-kpis strong {{
+    color: #0f172a;
+    font-size: 16px;
+}}
+
+.doc-flow {{
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 18px;
+}}
+
+.doc-flow div {{
+    padding: 12px 10px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #3730a3;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 900;
 }}
 
 .charts {{
@@ -611,6 +814,8 @@ th {{
             <div class="arrow">›</div>
         </div>
     </section>
+
+    {doc_html}
 
     <section class="charts">
         <div class="card chart">
