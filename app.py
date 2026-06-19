@@ -746,7 +746,7 @@ th {
     <div class="menu-item">Vendas</div>
     <div class="menu-item">Processos Documentais</div>
     <div class="menu-item">Conciliação Bancária</div>
-    <div class="menu-item">Relatórios</div>
+    <a class="menu-item" href="/8_Pendencias_Inteligentes" target="_parent" style="display:block;text-decoration:none;">Pendências Inteligentes</a><div class="menu-item">Relatórios</div>
 
     <div class="sidebar-note">
         GOIA Finance Platform<br><br>
@@ -904,3 +904,4 @@ html = html.replace("__DOC_HTML__", doc_html)
 html = html.replace("__LINHAS__", linhas)
 
 components.html(html, height=1450, scrolling=True)
+
