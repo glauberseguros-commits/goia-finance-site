@@ -32,19 +32,60 @@ def carregar_logo():
     return ""
 
 
-def carregar_dados_financeiros():
-    caminho_csv = Path("dados/financeiro.csv")
-    if caminho_csv.exists():
-        return pd.read_csv(caminho_csv)
 
-    return pd.DataFrame(columns=[
-        "data",
-        "tipo",
-        "descricao",
-        "categoria",
-        "valor",
-        "status"
-    ])
+def carregar_dados_financeiros():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+
+        receber = pd.read_sql_query("""
+            SELECT
+                data_vencimento AS data,
+                'Receber' AS tipo,
+                descricao,
+                categoria,
+                valor,
+                status
+            FROM contas_receber
+            WHERE empresa_id = 1
+        """, conn)
+
+        pagar = pd.read_sql_query("""
+            SELECT
+                data_vencimento AS data,
+                'Pagar' AS tipo,
+                descricao,
+                categoria,
+                -valor AS valor,
+                status
+            FROM contas_pagar
+            WHERE empresa_id = 1
+        """, conn)
+
+        conn.close()
+
+        df = pd.concat([receber, pagar], ignore_index=True)
+
+        if df.empty:
+            return pd.DataFrame(columns=[
+                "data",
+                "tipo",
+                "descricao",
+                "categoria",
+                "valor",
+                "status"
+            ])
+
+        return df
+
+    except Exception:
+        return pd.DataFrame(columns=[
+            "data",
+            "tipo",
+            "descricao",
+            "categoria",
+            "valor",
+            "status"
+        ])
 
 
 def buscar_ultimo_documento():
@@ -749,7 +790,7 @@ th {
     <div class="menu-item">Vendas</div>
     <div class="menu-item">Processos Documentais</div>
     <div class="menu-item">Conciliação Bancária</div>
-    <a class="menu-item" href="/Pendencias_Inteligentes" target="_parent" style="display:block;text-decoration:none;">Pendências Inteligentes</a><div class="menu-item">Relatórios</div>
+    <div class="menu-item">Relatórios</div>
 
     <div class="sidebar-note">
         GOIA Finance Platform<br><br>
