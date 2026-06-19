@@ -1,8 +1,8 @@
 import base64
+import sqlite3
 from pathlib import Path
 
 import pandas as pd
-import sqlite3
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -15,24 +15,38 @@ st.set_page_config(
 )
 
 
+DB_PATH = "bd/gofinance.db"
+
+
 def moeda(valor):
-    return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    try:
+        return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "R$ 0,00"
 
 
 def carregar_logo():
-    for caminho in [
-        Path("assets/logo_goia.png"),
-        Path("imagens/LOGO GOIA.png")
-    ]:
+    for caminho in [Path("assets/logo_goia.png"), Path("imagens/LOGO GOIA.png")]:
         if caminho.exists():
             return base64.b64encode(caminho.read_bytes()).decode()
     return ""
 
 
+def carregar_dados_financeiros():
+    caminho_csv = Path("dados/financeiro.csv")
+    if caminho_csv.exists():
+        return pd.read_csv(caminho_csv)
+
+    return pd.DataFrame([
+        {"data": "2026-06-01", "tipo": "Receber", "descricao": "Cliente A", "categoria": "Vendas", "valor": 1500.00, "status": "Recebido"},
+        {"data": "2026-06-02", "tipo": "Receber", "descricao": "Cliente B", "categoria": "Vendas", "valor": 2200.00, "status": "Pendente"},
+        {"data": "2026-06-03", "tipo": "Pagar", "descricao": "Fornecedor X", "categoria": "Fornecedores", "valor": -800.00, "status": "Pago"},
+    ])
+
 
 def buscar_ultimo_documento():
     try:
-        conn = sqlite3.connect("bd/gofinance.db")
+        conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
 
@@ -73,53 +87,130 @@ def buscar_ultimo_documento():
         """, (doc["id"],))
 
         pendencias_doc = cur.fetchone()["total"]
-
         conn.close()
 
-        return dict(doc) | {"pendencias_doc": pendencias_doc}
+        resultado = dict(doc)
+        resultado["pendencias_doc"] = pendencias_doc
+        return resultado
 
     except Exception:
         return None
 
 
-df = pd.read_csv("dados/financeiro.csv")
+def montar_linhas_tabela(df):
+    linhas = ""
+
+    for _, row in df.head(10).iterrows():
+        tipo = str(row.get("tipo", ""))
+        status = str(row.get("status", ""))
+        valor = moeda(row.get("valor", 0))
+
+        classe_tipo = "tipo-receber" if tipo == "Receber" else "tipo-pagar"
+
+        status_lower = status.lower()
+        if "receb" in status_lower or "baix" in status_lower:
+            classe_status = "status-ok"
+        elif "pend" in status_lower:
+            classe_status = "status-pendente"
+        elif "pago" in status_lower:
+            classe_status = "status-pago"
+        else:
+            classe_status = "status-neutro"
+
+        linhas += f"""
+        <tr>
+            <td>{row.get("data", "")}</td>
+            <td><span class="badge {classe_tipo}">{tipo}</span></td>
+            <td>{row.get("descricao", "")}</td>
+            <td>{row.get("categoria", "")}</td>
+            <td class="valor">{valor}</td>
+            <td><span class="badge {classe_status}">{status}</span></td>
+        </tr>
+        """
+
+    return linhas
+
+
+def montar_inteligencia_documental():
+    doc = buscar_ultimo_documento()
+
+    if not doc:
+        return """
+        <section class="doc-intel">
+            <div class="eyebrow">Inteligência documental</div>
+            <h2>Nenhum documento processado ainda</h2>
+            <p>Importe uma NF-e, boleto, comprovante ou extrato para iniciar o fluxo document-driven.</p>
+        </section>
+        """
+
+    numero = doc.get("numero_nfe") or doc.get("id")
+    serie = doc.get("serie_nfe") or ""
+    tipo_doc = doc.get("tipo_documento") or "Documento"
+    direcao_doc = doc.get("direcao") or "Documento financeiro"
+    valor_doc = moeda(doc.get("valor") or 0)
+    status_doc = doc.get("status_processamento") or "Processado"
+    pend_doc = doc.get("pendencias_doc") or 0
+
+    if "Venda" in direcao_doc:
+        parte_doc = doc.get("nome_destinatario") or "Cliente identificado"
+        acao = "Conta a receber criada"
+    elif "Compra" in direcao_doc or "Despesa" in direcao_doc:
+        parte_doc = doc.get("nome_emitente") or "Fornecedor identificado"
+        acao = "Conta a pagar criada"
+    else:
+        parte_doc = doc.get("nome_emitente") or doc.get("nome_destinatario") or "Contraparte identificada"
+        acao = "Documento salvo para análise"
+
+    titulo = f"{tipo_doc} {numero}"
+    if serie:
+        titulo += f" · Série {serie}"
+
+    return f"""
+    <section class="doc-intel">
+        <div class="eyebrow">Inteligência documental</div>
+        <h2>{titulo}</h2>
+        <p>{parte_doc}</p>
+
+        <div class="doc-kpis">
+            <div><span>Valor identificado</span><strong>{valor_doc}</strong></div>
+            <div><span>Classificação</span><strong>{direcao_doc}</strong></div>
+            <div><span>Status</span><strong>{status_doc}</strong></div>
+            <div><span>Pendências</span><strong>{pend_doc}</strong></div>
+        </div>
+
+        <div class="doc-flow">
+            <div>PDF recebido</div>
+            <div>Texto extraído</div>
+            <div>Documento classificado</div>
+            <div>{acao}</div>
+            <div>Processo documental criado</div>
+        </div>
+    </section>
+
+    <section class="timeline-doc">
+        <h3>Linha do tempo do processamento</h3>
+        <div class="timeline-grid">
+            <div class="timeline-step"><div class="timeline-hora">18/06 09:15</div><div class="timeline-evento">PDF recebido</div></div>
+            <div class="timeline-step"><div class="timeline-hora">18/06 09:15</div><div class="timeline-evento">Texto extraído</div></div>
+            <div class="timeline-step"><div class="timeline-hora">18/06 09:16</div><div class="timeline-evento">Documento classificado</div></div>
+            <div class="timeline-step"><div class="timeline-hora">18/06 09:16</div><div class="timeline-evento">{acao}</div></div>
+            <div class="timeline-step"><div class="timeline-hora">18/06 09:16</div><div class="timeline-evento">Processo criado</div></div>
+        </div>
+    </section>
+    """
+
+
+df = carregar_dados_financeiros()
 
 recebimentos = df[df["tipo"] == "Receber"]["valor"].sum()
 pagamentos = abs(df[df["tipo"] == "Pagar"]["valor"].sum())
 saldo = recebimentos - pagamentos
-pendencias = len(df[df["status"] == "Pendente"])
+pendencias = len(df[df["status"].astype(str).str.contains("Pendente", case=False, na=False)])
 total = len(df)
 
 logo_base64 = carregar_logo()
-
-linhas = ""
-for _, row in df.head(10).iterrows():
-    tipo = row.get("tipo", "")
-    status = row.get("status", "")
-    valor = moeda(row.get("valor", 0))
-
-    classe_tipo = "tipo-receber" if tipo == "Receber" else "tipo-pagar"
-
-    status_normalizado = str(status).lower()
-    if "receb" in status_normalizado or "baix" in status_normalizado:
-        classe_status = "status-ok"
-    elif "pend" in status_normalizado:
-        classe_status = "status-pendente"
-    elif "pago" in status_normalizado:
-        classe_status = "status-pago"
-    else:
-        classe_status = "status-neutro"
-
-    linhas += f"""
-    <tr>
-        <td>{row.get("data", "")}</td>
-        <td><span class="badge {classe_tipo}">{tipo}</span></td>
-        <td>{row.get("descricao", "")}</td>
-        <td>{row.get("categoria", "")}</td>
-        <td class="valor">{valor}</td>
-        <td><span class="badge {classe_status}">{status}</span></td>
-    </tr>
-    """
+linhas = montar_linhas_tabela(df)
+doc_html = montar_inteligencia_documental()
 
 
 st.markdown("""
@@ -143,138 +234,72 @@ iframe {
 """, unsafe_allow_html=True)
 
 
-
-ultimo_documento = buscar_ultimo_documento()
-
-if ultimo_documento:
-    numero = ultimo_documento.get("numero_nfe") or ultimo_documento.get("id")
-    serie = ultimo_documento.get("serie_nfe") or ""
-    direcao_doc = ultimo_documento.get("direcao") or "Documento financeiro"
-    tipo_doc = ultimo_documento.get("tipo_documento") or "Documento"
-    valor_doc = moeda(ultimo_documento.get("valor") or 0)
-    status_doc = ultimo_documento.get("status_processamento") or "Processado"
-    pend_doc = ultimo_documento.get("pendencias_doc") or 0
-
-    if "Venda" in direcao_doc:
-        parte_doc = ultimo_documento.get("nome_destinatario") or "Cliente identificado"
-        acao_doc = "Conta a receber criada"
-    elif "Compra" in direcao_doc or "Despesa" in direcao_doc:
-        parte_doc = ultimo_documento.get("nome_emitente") or "Fornecedor identificado"
-        acao_doc = "Conta a pagar criada"
-    else:
-        parte_doc = ultimo_documento.get("nome_emitente") or ultimo_documento.get("nome_destinatario") or "Contraparte identificada"
-        acao_doc = "Documento salvo para análise"
-
-    titulo_doc = f"{tipo_doc} {numero}"
-    if serie:
-        titulo_doc += f" · Série {serie}"
-
-    doc_html = f"""
-    <section class="doc-intel">
-        <div>
-            <div class="eyebrow">Inteligência documental</div>
-            <h2>{titulo_doc}</h2>
-            <p>{parte_doc}</p>
-        </div>
-
-        <div class="doc-kpis">
-            <div>
-                <span>Valor identificado</span>
-                <strong>{valor_doc}</strong>
-            </div>
-            <div>
-                <span>Classificação</span>
-                <strong>{direcao_doc}</strong>
-            </div>
-            <div>
-                <span>Status</span>
-                <strong>{status_doc}</strong>
-            </div>
-            <div>
-                <span>Pendências</span>
-                <strong>{pend_doc}</strong>
-            </div>
-        </div>
-
-        <div class="doc-flow">
-            <div>PDF recebido</div>
-            <div>Texto extraído</div>
-            <div>Documento classificado</div>
-            <div>{acao_doc}</div>
-            <div>Processo documental criado</div>
-        </div>
-    </section>
-    """
-else:
-    doc_html = """
-    <section class="doc-intel">
-        <div>
-            <div class="eyebrow">Inteligência documental</div>
-            <h2>Nenhum documento processado ainda</h2>
-            <p>Importe uma NF-e, boleto, comprovante ou extrato para iniciar o fluxo document-driven.</p>
-        </div>
-    </section>
-    """
-
-
-html = f"""
+html = """
 <!DOCTYPE html>
 <html>
 <head>
 <style>
-* {{
+* {
     box-sizing: border-box;
     font-family: Inter, Arial, sans-serif;
-}}
+}
 
-body {{
+body {
     margin: 0;
     background: #f5f7ff;
     color: #0f172a;
-}}
+}
 
-.app {{
+.app {
     display: grid;
     grid-template-columns: 210px 1fr;
     min-height: 100vh;
-}}
+}
 
-.sidebar {{
+.sidebar {
     background: linear-gradient(180deg, #071126 0%, #0b1733 60%, #050b18 100%);
-    padding: 28px 18px;
+    padding: 28px 16px;
     color: white;
-}}
+}
 
-.logo-box {{
-    padding: 0 0 34px;
-}}
-
-.logo {{
-    width: 138px;
+.logo {
+    width: 140px;
     display: block;
-}}
+    margin-bottom: 34px;
+}
 
-.menu-item {{
+.menu-item {
     padding: 13px 14px;
     border-radius: 13px;
     margin-bottom: 8px;
     font-size: 14px;
     color: #e5e7eb;
-}}
+}
 
-.menu-item.active {{
+.menu-item.active {
     background: #14285a;
     font-weight: 800;
-}}
+}
 
-.main {{
+.sidebar-note {
+    margin-top: 36px;
+    padding: 18px;
+    border-radius: 20px;
+    background: rgba(37,99,235,.12);
+    border: 1px solid rgba(96,165,250,.25);
+    font-size: 13px;
+    line-height: 1.45;
+    color: #cbd5e1;
+}
+
+.main {
     padding: 26px 38px 52px;
     background:
         radial-gradient(circle at top right, rgba(37,99,235,.12), transparent 28%),
         linear-gradient(135deg, #f8fafc 0%, #f1f5ff 48%, #ffffff 100%);
-}}
+}
 
-.topbar {{
+.topbar {
     display: flex;
     justify-content: flex-end;
     align-items: center;
@@ -282,9 +307,9 @@ body {{
     color: #475569;
     font-size: 14px;
     margin-bottom: 24px;
-}}
+}
 
-.avatar {{
+.avatar {
     width: 42px;
     height: 42px;
     border-radius: 50%;
@@ -294,9 +319,9 @@ body {{
     align-items: center;
     justify-content: center;
     font-weight: 900;
-}}
+}
 
-.hero {{
+.hero {
     display: grid;
     grid-template-columns: 1fr 300px;
     align-items: center;
@@ -306,54 +331,54 @@ body {{
     background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(239,247,255,.92));
     border: 1px solid #e5e7eb;
     box-shadow: 0 22px 70px rgba(15,23,42,.08);
-}}
+}
 
-.hero h1 {{
+.hero h1 {
     margin: 0 0 14px;
     font-size: 38px;
     line-height: 1.08;
     letter-spacing: -.9px;
-}}
+}
 
-.hero p {{
+.hero p {
     max-width: 900px;
     margin: 0;
     color: #475569;
     font-size: 16.5px;
     line-height: 1.65;
-}}
+}
 
-.wave {{
+.wave {
     height: 150px;
     border-radius: 20px;
     background: repeating-radial-gradient(ellipse at center, rgba(14,165,233,.35) 0 1px, transparent 2px 18px);
     opacity: .45;
-}}
+}
 
-.kpis {{
+.kpis {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 16px;
     margin-top: 20px;
-}}
+}
 
-.card {{
+.card {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 24px;
     padding: 26px;
     box-shadow: 0 18px 48px rgba(15,23,42,.07);
-}}
+}
 
-.kpi-card {{
+.kpi-card {
     display: grid;
     grid-template-columns: 54px 1fr;
     gap: 16px;
     align-items: start;
     min-height: 152px;
-}}
+}
 
-.icon {{
+.icon {
     width: 52px;
     height: 52px;
     border-radius: 50%;
@@ -362,160 +387,144 @@ body {{
     justify-content: center;
     font-size: 24px;
     font-weight: 900;
-}}
+}
 
-.icon.green {{
-    background: #dcfce7;
-    color: #16a34a;
-}}
+.icon.green { background: #dcfce7; color: #16a34a; }
+.icon.red { background: #fee2e2; color: #dc2626; }
+.icon.blue { background: #dbeafe; color: #2563eb; }
+.icon.purple { background: #ede9fe; color: #7c3aed; }
 
-.icon.red {{
-    background: #fee2e2;
-    color: #dc2626;
-}}
-
-.icon.blue {{
-    background: #dbeafe;
-    color: #2563eb;
-}}
-
-.icon.purple {{
-    background: #ede9fe;
-    color: #7c3aed;
-}}
-
-.kpi-label {{
+.kpi-label {
     color: #475569;
     font-size: 14px;
     font-weight: 800;
-}}
+}
 
-.kpi-value {{
+.kpi-value {
     color: #020617;
     font-size: 30px;
     font-weight: 950;
     margin-top: 8px;
-}}
+}
 
-.kpi-sub {{
+.kpi-sub {
     color: #64748b;
     font-size: 13px;
     margin-top: 6px;
-}}
+}
 
-.trend {{
+.trend {
     margin-top: 14px;
     font-size: 13px;
     font-weight: 800;
-}}
+}
 
-.green-text {{ color: #16a34a; }}
-.red-text {{ color: #dc2626; }}
-.purple-text {{ color: #7c3aed; }}
+.green-text { color: #16a34a; }
+.red-text { color: #dc2626; }
+.purple-text { color: #7c3aed; }
 
-.section-title {{
+.section-title {
     font-size: 23px;
     font-weight: 950;
     margin: 26px 0 14px;
-}}
+}
 
-.modules {{
+.modules {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
-}}
+}
 
-.module-card {{
+.module-card {
     display: grid;
     grid-template-columns: 54px 1fr 20px;
     gap: 16px;
     align-items: center;
     min-height: 108px;
-}}
+}
 
-.module-title {{
+.module-title {
     font-weight: 950;
     font-size: 16px;
     margin-bottom: 8px;
-}}
+}
 
-.module-text {{
+.module-text {
     color: #64748b;
     font-size: 13.5px;
     line-height: 1.5;
-}}
+}
 
-.arrow {{
+.arrow {
     color: #64748b;
     font-size: 24px;
-}}
+}
 
-
-.doc-intel {{
+.doc-intel {
     margin-top: 18px;
     padding: 26px;
     border-radius: 24px;
     background: linear-gradient(135deg, #ffffff, #f8fbff);
     border: 1px solid #e5e7eb;
     box-shadow: 0 18px 48px rgba(15,23,42,.07);
-}}
+}
 
-.doc-intel .eyebrow {{
+.doc-intel .eyebrow {
     color: #2563eb;
     font-size: 13px;
     font-weight: 950;
     text-transform: uppercase;
     letter-spacing: .08em;
     margin-bottom: 8px;
-}}
+}
 
-.doc-intel h2 {{
+.doc-intel h2 {
     margin: 0;
     font-size: 24px;
     letter-spacing: -.4px;
-}}
+}
 
-.doc-intel p {{
+.doc-intel p {
     margin: 8px 0 0;
     color: #64748b;
     font-size: 14px;
-}}
+}
 
-.doc-kpis {{
+.doc-kpis {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 14px;
     margin-top: 22px;
-}}
+}
 
-.doc-kpis div {{
+.doc-kpis div {
     padding: 16px;
     border-radius: 18px;
     background: #f8fafc;
     border: 1px solid #e5e7eb;
-}}
+}
 
-.doc-kpis span {{
+.doc-kpis span {
     display: block;
     color: #64748b;
     font-size: 12px;
     font-weight: 800;
     margin-bottom: 8px;
-}}
+}
 
-.doc-kpis strong {{
+.doc-kpis strong {
     color: #0f172a;
     font-size: 16px;
-}}
+}
 
-.doc-flow {{
+.doc-flow {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     gap: 10px;
     margin-top: 18px;
-}}
+}
 
-.doc-flow div {{
+.doc-flow div {
     padding: 12px 10px;
     border-radius: 999px;
     background: #eef2ff;
@@ -523,11 +532,9 @@ body {{
     text-align: center;
     font-size: 12px;
     font-weight: 900;
-}}
+}
 
-
-
-.timeline-doc {{
+.timeline-doc {
     margin-top: 20px;
     padding: 24px;
     border-radius: 24px;
@@ -536,20 +543,20 @@ body {{
     box-shadow: 0 18px 48px rgba(15,23,42,.05);
 }
 
-.timeline-doc h3 {{
+.timeline-doc h3 {
     margin: 0 0 20px 0;
     font-size: 20px;
     color: #0f172a;
 }
 
-.timeline-grid {{
+.timeline-grid {
     display: flex;
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
 }
 
-.timeline-step {{
+.timeline-step {
     flex: 1;
     min-width: 180px;
     background: #f8fafc;
@@ -558,89 +565,89 @@ body {{
     padding: 14px;
 }
 
-.timeline-hora {{
+.timeline-hora {
     font-size: 12px;
     color: #64748b;
     margin-bottom: 6px;
     font-weight: 700;
 }
 
-.timeline-evento {{
+.timeline-evento {
     font-size: 14px;
     color: #0f172a;
     font-weight: 800;
 }
 
-.charts {{
+.charts {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
     margin-top: 16px;
-}}
+}
 
-.chart {{
+.chart {
     min-height: 300px;
-}}
+}
 
-.chart-title {{
+.chart-title {
     font-size: 20px;
     font-weight: 950;
     margin-bottom: 20px;
-}}
+}
 
-.bar-area {{
+.bar-area {
     height: 225px;
     display: flex;
     align-items: end;
     justify-content: center;
     gap: 92px;
     border-bottom: 1px solid #cbd5e1;
-}}
+}
 
-.bar {{
+.bar {
     width: 150px;
     border-radius: 8px 8px 0 0;
     position: relative;
     text-align: center;
-}}
+}
 
-.bar span {{
+.bar span {
     position: absolute;
     top: -28px;
     left: 0;
     right: 0;
     color: #64748b;
     font-size: 13px;
-}}
+}
 
-.bar.greenbar {{
+.bar.greenbar {
     height: 175px;
     background: #22c55e;
-}}
+}
 
-.bar.redbar {{
+.bar.redbar {
     height: 120px;
     background: #ef4444;
-}}
+}
 
-.donut-wrap {{
+.donut-wrap {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 70px;
     height: 225px;
-}}
+}
 
-.donut {{
+.donut {
     width: 170px;
     height: 170px;
     border-radius: 50%;
     background: conic-gradient(#4f46e5 0 72%, #facc15 72% 91%, #ef4444 91% 100%);
     position: relative;
-}}
+}
 
-.donut::after {{
-    content: "Total\\A {total}\\A movimentações";
+.donut::after {
+    content: "Total\\A __TOTAL__\\A movimentações";
     white-space: pre;
     position: absolute;
     width: 104px;
@@ -656,94 +663,71 @@ body {{
     color: #64748b;
     font-size: 13px;
     line-height: 1.4;
-}}
+}
 
-.legend div {{
+.legend div {
     margin-bottom: 16px;
     font-size: 14px;
-}}
+}
 
-.dot {{
+.dot {
     display: inline-block;
     width: 10px;
     height: 10px;
     border-radius: 50%;
     margin-right: 10px;
-}}
+}
 
-.dot.blue {{ background: #4f46e5; }}
-.dot.yellow {{ background: #facc15; }}
-.dot.red {{ background: #ef4444; }}
+.dot.blue { background: #4f46e5; }
+.dot.yellow { background: #facc15; }
+.dot.red { background: #ef4444; }
 
-table {{
+table {
     width: 100%;
     border-collapse: collapse;
     background: white;
     border-radius: 18px;
     overflow: hidden;
     border: 1px solid #e5e7eb;
-}}
+}
 
-th, td {{
+th, td {
     text-align: left;
     padding: 13px 16px;
     font-size: 14px;
     border-bottom: 1px solid #e5e7eb;
-}}
+}
 
-th {{
+th {
     background: #f8fafc;
     color: #475569;
     font-weight: 800;
-}}
+}
 
-.valor {{
+.valor {
     font-weight: 800;
-}}
+}
 
-.badge {{
+.badge {
     display: inline-block;
     padding: 5px 10px;
     border-radius: 999px;
     font-size: 12px;
     font-weight: 800;
-}}
+}
 
-.tipo-receber {{
-    background: #dcfce7;
-    color: #15803d;
-}}
+.tipo-receber { background: #dcfce7; color: #15803d; }
+.tipo-pagar { background: #e2e8f0; color: #334155; }
+.status-ok { background: #dcfce7; color: #15803d; }
+.status-pendente { background: #fef3c7; color: #b45309; }
+.status-pago { background: #dbeafe; color: #1d4ed8; }
+.status-neutro { background: #f1f5f9; color: #334155; }
 
-.tipo-pagar {{
-    background: #e2e8f0;
-    color: #334155;
-}}
-
-.status-ok {{
-    background: #dcfce7;
-    color: #15803d;
-}}
-
-.status-pendente {{
-    background: #fef3c7;
-    color: #b45309;
-}}
-
-.status-pago {{
-    background: #dbeafe;
-    color: #1d4ed8;
-}}
-
-.status-neutro {{
-    background: #f1f5f9;
-    color: #334155;
-}}
-
-.footer {{
+.footer {
     margin-top: 24px;
     color: #94a3b8;
     font-size: 13px;
-}}
+}
 </style>
 </head>
 
@@ -751,9 +735,7 @@ th {{
 <div class="app">
 
 <aside class="sidebar">
-    <div class="logo-box">
-        <img class="logo" src="data:image/png;base64,{logo_base64}">
-    </div>
+    <img class="logo" src="data:image/png;base64,__LOGO__">
 
     <div class="menu-item active">Dashboard</div>
     <div class="menu-item">Importar Documento</div>
@@ -766,8 +748,9 @@ th {{
     <div class="menu-item">Conciliação Bancária</div>
     <div class="menu-item">Relatórios</div>
 
-    <div class="sidebar-card">
-        
+    <div class="sidebar-note">
+        GOIA Finance Platform<br><br>
+        Automação financeira document-driven para empresas que precisam de controle, evidência e conciliação.
     </div>
 </aside>
 
@@ -793,7 +776,7 @@ th {{
             <div class="icon green">↗</div>
             <div>
                 <div class="kpi-label">Recebimentos</div>
-                <div class="kpi-value">{moeda(recebimentos)}</div>
+                <div class="kpi-value">__RECEBIMENTOS__</div>
                 <div class="kpi-sub">Total de receitas</div>
                 <div class="trend green-text">↑ 12,5% vs. mês anterior</div>
             </div>
@@ -803,7 +786,7 @@ th {{
             <div class="icon red">↘</div>
             <div>
                 <div class="kpi-label">Pagamentos</div>
-                <div class="kpi-value">{moeda(pagamentos)}</div>
+                <div class="kpi-value">__PAGAMENTOS__</div>
                 <div class="kpi-sub">Total de despesas</div>
                 <div class="trend red-text">↑ 8,3% vs. mês anterior</div>
             </div>
@@ -813,7 +796,7 @@ th {{
             <div class="icon blue">▦</div>
             <div>
                 <div class="kpi-label">Saldo operacional</div>
-                <div class="kpi-value">{moeda(saldo)}</div>
+                <div class="kpi-value">__SALDO__</div>
                 <div class="kpi-sub">Resultado do período</div>
                 <div class="trend green-text">↑ 18,7% vs. mês anterior</div>
             </div>
@@ -823,7 +806,7 @@ th {{
             <div class="icon purple">▣</div>
             <div>
                 <div class="kpi-label">Pendências</div>
-                <div class="kpi-value">{pendencias}</div>
+                <div class="kpi-value">__PENDENCIAS__</div>
                 <div class="kpi-sub">Itens pendentes</div>
                 <div class="trend purple-text">Ver detalhes →</div>
             </div>
@@ -861,49 +844,14 @@ th {{
         </div>
     </section>
 
-    {doc_html}
-
-<section class="timeline-doc">
-    <h3>Linha do tempo do processamento</h3>
-
-    <div class="timeline-grid">
-
-        <div class="timeline-step">
-            <div class="timeline-hora">18/06 09:15</div>
-            <div class="timeline-evento">PDF recebido</div>
-        </div>
-
-        <div class="timeline-step">
-            <div class="timeline-hora">18/06 09:15</div>
-            <div class="timeline-evento">Texto extraído</div>
-        </div>
-
-        <div class="timeline-step">
-            <div class="timeline-hora">18/06 09:16</div>
-            <div class="timeline-evento">Documento classificado</div>
-        </div>
-
-        <div class="timeline-step">
-            <div class="timeline-hora">18/06 09:16</div>
-            <div class="timeline-evento">Conta criada</div>
-        </div>
-
-        <div class="timeline-step">
-            <div class="timeline-hora">18/06 09:16</div>
-            <div class="timeline-evento">Processo documental criado</div>
-        </div>
-
-    </div>
-</section>
-
-
+    __DOC_HTML__
 
     <section class="charts">
         <div class="card chart">
             <div class="chart-title">Recebimentos x Pagamentos</div>
             <div class="bar-area">
-                <div class="bar greenbar"><span>{moeda(recebimentos)}</span></div>
-                <div class="bar redbar"><span>{moeda(pagamentos)}</span></div>
+                <div class="bar greenbar"><span>__RECEBIMENTOS__</span></div>
+                <div class="bar redbar"><span>__PAGAMENTOS__</span></div>
             </div>
         </div>
 
@@ -934,11 +882,11 @@ th {{
             </tr>
         </thead>
         <tbody>
-            {linhas}
+            __LINHAS__
         </tbody>
     </table>
 
-    <div class="footer">GOIA Finance Platform · Versão 1.3 · Dia 2</div>
+    <div class="footer">GOIA Finance Platform · Versão 1.4 · Dia 3</div>
 
 </main>
 </div>
@@ -946,8 +894,13 @@ th {{
 </html>
 """
 
-components.html(html, height=1250, scrolling=True)
+html = html.replace("__LOGO__", logo_base64)
+html = html.replace("__RECEBIMENTOS__", moeda(recebimentos))
+html = html.replace("__PAGAMENTOS__", moeda(pagamentos))
+html = html.replace("__SALDO__", moeda(saldo))
+html = html.replace("__PENDENCIAS__", str(pendencias))
+html = html.replace("__TOTAL__", str(total))
+html = html.replace("__DOC_HTML__", doc_html)
+html = html.replace("__LINHAS__", linhas)
 
-
-
-
+components.html(html, height=1450, scrolling=True)
