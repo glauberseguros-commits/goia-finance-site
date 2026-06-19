@@ -37,10 +37,13 @@ def carregar_dados_financeiros():
     if caminho_csv.exists():
         return pd.read_csv(caminho_csv)
 
-    return pd.DataFrame([
-        {"data": "2026-06-01", "tipo": "Receber", "descricao": "Cliente A", "categoria": "Vendas", "valor": 1500.00, "status": "Recebido"},
-        {"data": "2026-06-02", "tipo": "Receber", "descricao": "Cliente B", "categoria": "Vendas", "valor": 2200.00, "status": "Pendente"},
-        {"data": "2026-06-03", "tipo": "Pagar", "descricao": "Fornecedor X", "categoria": "Fornecedores", "valor": -800.00, "status": "Pago"},
+    return pd.DataFrame(columns=[
+        "data",
+        "tipo",
+        "descricao",
+        "categoria",
+        "valor",
+        "status"
     ])
 
 
