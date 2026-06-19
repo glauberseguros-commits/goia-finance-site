@@ -782,15 +782,15 @@ th {
     <img class="logo" src="data:image/png;base64,__LOGO__">
 
     <div class="menu-item active">Dashboard</div>
-    <a class="menu-item" href="/Importar_Documento" target="_top" style="display:block;text-decoration:none;">Importar Documento</a>
-    <a class="menu-item" href="/Contas_a_Receber" target="_top" style="display:block;text-decoration:none;">Contas a Receber</a>
-    <a class="menu-item" href="/Contas_a_Pagar" target="_top" style="display:block;text-decoration:none;">Contas a Pagar</a>
-    <a class="menu-item" href="/Compras" target="_top" style="display:block;text-decoration:none;">Compras</a>
+    <a class="menu-item" href="#" onclick="window.parent.location.href='/Importar_Documento'; return false;" style="display:block;text-decoration:none;">Importar Documento</a>
+    <a class="menu-item" href="#" onclick="window.parent.location.href='/Contas_a_Receber'; return false;" style="display:block;text-decoration:none;">Contas a Receber</a>
+    <a class="menu-item" href="#" onclick="window.parent.location.href='/Contas_a_Pagar'; return false;" style="display:block;text-decoration:none;">Contas a Pagar</a>
+    <a class="menu-item" href="#" onclick="window.parent.location.href='/Compras'; return false;" style="display:block;text-decoration:none;">Compras</a>
     <div class="menu-item">Produtos Estoque</div>
-    <a class="menu-item" href="/Vendas" target="_top" style="display:block;text-decoration:none;">Vendas</a>
-    <a class="menu-item" href="/Processos_Documentais" target="_top" style="display:block;text-decoration:none;">Processos Documentais</a>
-    <a class="menu-item" href="/Conciliacao_Bancaria" target="_top" style="display:block;text-decoration:none;">Conciliação Bancária</a>
-    <a class="menu-item" href="/Relatorios" target="_top" style="display:block;text-decoration:none;">Relatórios</a>
+    <a class="menu-item" href="#" onclick="window.parent.location.href='/Vendas'; return false;" style="display:block;text-decoration:none;">Vendas</a>
+    <a class="menu-item" href="#" onclick="window.parent.location.href='/Processos_Documentais'; return false;" style="display:block;text-decoration:none;">Processos Documentais</a>
+    <a class="menu-item" href="#" onclick="window.parent.location.href='/Conciliacao_Bancaria'; return false;" style="display:block;text-decoration:none;">Conciliação Bancária</a>
+    <a class="menu-item" href="#" onclick="window.parent.location.href='/Relatorios'; return false;" style="display:block;text-decoration:none;">Relatórios</a>
 
     <div class="sidebar-note">
         GOIA Finance Platform<br><br>
