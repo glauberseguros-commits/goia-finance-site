@@ -527,7 +527,7 @@ body {{
 
 
 
-.timeline-doc {
+.timeline-doc {{
     margin-top: 20px;
     padding: 24px;
     border-radius: 24px;
@@ -536,20 +536,20 @@ body {{
     box-shadow: 0 18px 48px rgba(15,23,42,.05);
 }
 
-.timeline-doc h3 {
+.timeline-doc h3 {{
     margin: 0 0 20px 0;
     font-size: 20px;
     color: #0f172a;
 }
 
-.timeline-grid {
+.timeline-grid {{
     display: flex;
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
 }
 
-.timeline-step {
+.timeline-step {{
     flex: 1;
     min-width: 180px;
     background: #f8fafc;
@@ -558,14 +558,14 @@ body {{
     padding: 14px;
 }
 
-.timeline-hora {
+.timeline-hora {{
     font-size: 12px;
     color: #64748b;
     margin-bottom: 6px;
     font-weight: 700;
 }
 
-.timeline-evento {
+.timeline-evento {{
     font-size: 14px;
     color: #0f172a;
     font-weight: 800;
@@ -947,6 +947,7 @@ th {{
 """
 
 components.html(html, height=1250, scrolling=True)
+
 
 
 
