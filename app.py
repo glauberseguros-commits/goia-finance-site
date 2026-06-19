@@ -782,15 +782,15 @@ th {
     <img class="logo" src="data:image/png;base64,__LOGO__">
 
     <div class="menu-item active">Dashboard</div>
-    <div class="menu-item">Importar Documento</div>
-    <div class="menu-item">Contas a Receber</div>
-    <div class="menu-item">Contas a Pagar</div>
-    <div class="menu-item">Compras</div>
+    <a class="menu-item" href="/Importar_Documento" target="_parent" style="display:block;text-decoration:none;">Importar Documento</a>
+    <a class="menu-item" href="/Contas_a_Receber" target="_parent" style="display:block;text-decoration:none;">Contas a Receber</a>
+    <a class="menu-item" href="/Contas_a_Pagar" target="_parent" style="display:block;text-decoration:none;">Contas a Pagar</a>
+    <a class="menu-item" href="/Compras" target="_parent" style="display:block;text-decoration:none;">Compras</a>
     <div class="menu-item">Produtos Estoque</div>
-    <div class="menu-item">Vendas</div>
-    <div class="menu-item">Processos Documentais</div>
-    <div class="menu-item">Conciliação Bancária</div>
-    <div class="menu-item">Relatórios</div>
+    <a class="menu-item" href="/Vendas" target="_parent" style="display:block;text-decoration:none;">Vendas</a>
+    <a class="menu-item" href="/Processos_Documentais" target="_parent" style="display:block;text-decoration:none;">Processos Documentais</a>
+    <a class="menu-item" href="/Conciliacao_Bancaria" target="_parent" style="display:block;text-decoration:none;">Conciliação Bancária</a>
+    <a class="menu-item" href="/Relatorios" target="_parent" style="display:block;text-decoration:none;">Relatórios</a>
 
     <div class="sidebar-note">
         GOIA Finance Platform<br><br>
