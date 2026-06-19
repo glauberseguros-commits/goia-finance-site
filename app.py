@@ -782,15 +782,15 @@ th {
     <img class="logo" src="data:image/png;base64,__LOGO__">
 
     <div class="menu-item active">Dashboard</div>
-    <a class="menu-item" href="/Importar_Documento" target="_parent" style="display:block;text-decoration:none;">Importar Documento</a>
-    <a class="menu-item" href="/Contas_a_Receber" target="_parent" style="display:block;text-decoration:none;">Contas a Receber</a>
-    <a class="menu-item" href="/Contas_a_Pagar" target="_parent" style="display:block;text-decoration:none;">Contas a Pagar</a>
-    <a class="menu-item" href="/Compras" target="_parent" style="display:block;text-decoration:none;">Compras</a>
+    <a class="menu-item" href="/Importar_Documento" target="_top" style="display:block;text-decoration:none;">Importar Documento</a>
+    <a class="menu-item" href="/Contas_a_Receber" target="_top" style="display:block;text-decoration:none;">Contas a Receber</a>
+    <a class="menu-item" href="/Contas_a_Pagar" target="_top" style="display:block;text-decoration:none;">Contas a Pagar</a>
+    <a class="menu-item" href="/Compras" target="_top" style="display:block;text-decoration:none;">Compras</a>
     <div class="menu-item">Produtos Estoque</div>
-    <a class="menu-item" href="/Vendas" target="_parent" style="display:block;text-decoration:none;">Vendas</a>
-    <a class="menu-item" href="/Processos_Documentais" target="_parent" style="display:block;text-decoration:none;">Processos Documentais</a>
-    <a class="menu-item" href="/Conciliacao_Bancaria" target="_parent" style="display:block;text-decoration:none;">Conciliação Bancária</a>
-    <a class="menu-item" href="/Relatorios" target="_parent" style="display:block;text-decoration:none;">Relatórios</a>
+    <a class="menu-item" href="/Vendas" target="_top" style="display:block;text-decoration:none;">Vendas</a>
+    <a class="menu-item" href="/Processos_Documentais" target="_top" style="display:block;text-decoration:none;">Processos Documentais</a>
+    <a class="menu-item" href="/Conciliacao_Bancaria" target="_top" style="display:block;text-decoration:none;">Conciliação Bancária</a>
+    <a class="menu-item" href="/Relatorios" target="_top" style="display:block;text-decoration:none;">Relatórios</a>
 
     <div class="sidebar-note">
         GOIA Finance Platform<br><br>
@@ -948,5 +948,6 @@ html = html.replace("__DOC_HTML__", doc_html)
 html = html.replace("__LINHAS__", linhas)
 
 components.html(html, height=1450, scrolling=True)
+
 
 
