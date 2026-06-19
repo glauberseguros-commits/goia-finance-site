@@ -128,6 +128,7 @@ def ultimo_documento():
     conn.close()
     return dict(row) if row else None
 
+
 df = carregar_movimentacoes()
 
 recebimentos = df[df["tipo"] == "Receber"]["valor"].sum() if not df.empty else 0
@@ -148,22 +149,68 @@ st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Docume
 st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
 
 st.title("GOIA Finance Platform")
-st.subheader("Inteligência que transforma finanças")
-st.caption("Automação financeira document-driven para importar documentos, estruturar compras e vendas, controlar contas a pagar e receber, acompanhar processos documentais e apoiar a conciliação bancária.")
+st.subheader("Visão executiva document-driven")
+st.caption("Documentos, compras, vendas, contas, conciliações, retenções e processos em uma visão única.")
 
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.metric("Recebimentos", moeda(recebimentos))
+    st.metric("Receita bruta", moeda(recebimentos))
 
 with col2:
     st.metric("Pagamentos", moeda(pagamentos))
 
 with col3:
-    st.metric("Saldo operacional", moeda(saldo))
+    st.metric("Margem operacional", moeda(saldo))
 
 with col4:
-    st.metric("Pendências", pendencias)
+    st.metric("Pendências abertas", pendencias)
+
+st.divider()
+
+st.subheader("Processo em destaque")
+
+conn = conectar()
+try:
+    processo = pd.read_sql_query("""
+        SELECT
+            titulo,
+            contraparte_nome,
+            valor_total,
+            valor_recebido,
+            valor_retido,
+            margem_bruta,
+            status,
+            proxima_acao
+        FROM processos_documentais
+        WHERE empresa_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+    """, conn, params=(EMPRESA_ID,))
+except:
+    processo = pd.DataFrame()
+conn.close()
+
+if processo.empty:
+    st.info("Nenhum processo documental encontrado.")
+else:
+    p0 = processo.iloc[0]
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        st.metric("Valor faturado", moeda(p0.get("valor_total", 0)))
+    with c2:
+        st.metric("Recebido em banco", moeda(p0.get("valor_recebido", 0)))
+    with c3:
+        st.metric("Retenção", moeda(p0.get("valor_retido", 0)))
+    with c4:
+        st.metric("Margem", moeda(p0.get("margem_bruta", 0)))
+
+    with st.container(border=True):
+        st.markdown(f"### {p0.get('titulo', 'Processo')}")
+        st.write(f"**Contraparte:** {p0.get('contraparte_nome', '')}")
+        st.write(f"**Status:** {p0.get('status', '')}")
+        st.write(f"**Próxima ação:** {p0.get('proxima_acao', '')}")
 
 st.divider()
 
@@ -174,49 +221,31 @@ m1, m2, m3 = st.columns(3)
 with m1:
     with st.container(border=True):
         st.markdown("### 📄 Importar Documento")
-        st.write("Entrada única para notas, comprovantes, boletos, extratos e documentos financeiros.")
+        st.write("Entrada única para PDF, XML, imagens, planilhas, extratos, comprovantes e documentos financeiros.")
         st.page_link("pages/1_Importar_Documento.py", label="Acessar importação")
 
 with m2:
     with st.container(border=True):
-        st.markdown("### 🏦 Conciliação Bancária")
-        st.write("Cruzamento entre movimentos bancários, contas a pagar, contas a receber e comprovantes.")
-        st.page_link("pages/8_Conciliacao_Bancaria.py", label="Acessar conciliação")
+        st.markdown("### 🗂️ Processos Documentais")
+        st.write("Agrupa documentos, evidências, pendências, compras, vendas, baixas e encerramento.")
+        st.page_link("pages/7_Processos_Documentais.py", label="Acessar processos")
 
 with m3:
     with st.container(border=True):
-        st.markdown("### 🗂️ Processos Documentais")
-        st.write("Controle de pendências, evidências e encerramento financeiro por documento.")
-        st.page_link("pages/7_Processos_Documentais.py", label="Acessar processos")
+        st.markdown("### 🏦 Conciliação Bancária")
+        st.write("Valida banco, contas a receber, contas a pagar, comprovantes e retenções.")
+        st.page_link("pages/8_Conciliacao_Bancaria.py", label="Acessar conciliação")
 
 st.divider()
 
-doc = ultimo_documento()
-
-st.subheader("Inteligência documental")
-
-if doc:
-    with st.container(border=True):
-        st.markdown(f"### {doc.get('tipo_documento') or 'Documento'}")
-        st.write(f"**Direção:** {doc.get('direcao') or 'A classificar'}")
-        st.write(f"**Valor:** {moeda(doc.get('valor') or 0)}")
-        st.write(f"**Status:** {doc.get('status_processamento') or 'Processado'}")
-else:
-    with st.container(border=True):
-        st.markdown("### Nenhum documento processado ainda")
-        st.write("Importe uma NF-e, boleto, comprovante ou extrato para iniciar o fluxo document-driven.")
-
-st.divider()
-
-st.subheader("Movimentações financeiras")
+st.subheader("Movimentações operacionais")
 
 if df.empty:
-    st.info("Nenhuma movimentação financeira encontrada. Importe o primeiro documento para iniciar.")
+    st.info("Nenhuma movimentação financeira encontrada.")
 else:
     df_view = df.copy()
     df_view["data"] = df_view["data"].apply(data_br)
     df_view["valor"] = df_view["valor"].apply(moeda)
-    st.dataframe(df_view, use_container_width=True, hide_index=True)
+    st.dataframe(df_view, width="stretch", hide_index=True)
 
-st.caption("GOIA Finance Platform · Dashboard nativo Streamlit")
-
+st.caption("GOIA Finance Platform · Documentos → Evidências → Operação → Conciliação → Encerramento")
