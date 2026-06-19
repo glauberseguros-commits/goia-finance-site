@@ -525,6 +525,52 @@ body {{
     font-weight: 900;
 }}
 
+
+
+.timeline-doc {
+    margin-top: 20px;
+    padding: 24px;
+    border-radius: 24px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 18px 48px rgba(15,23,42,.05);
+}
+
+.timeline-doc h3 {
+    margin: 0 0 20px 0;
+    font-size: 20px;
+    color: #0f172a;
+}
+
+.timeline-grid {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.timeline-step {
+    flex: 1;
+    min-width: 180px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 14px;
+}
+
+.timeline-hora {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+.timeline-evento {
+    font-size: 14px;
+    color: #0f172a;
+    font-weight: 800;
+}
+
 .charts {{
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -816,6 +862,41 @@ th {{
     </section>
 
     {doc_html}
+
+<section class="timeline-doc">
+    <h3>Linha do tempo do processamento</h3>
+
+    <div class="timeline-grid">
+
+        <div class="timeline-step">
+            <div class="timeline-hora">18/06 09:15</div>
+            <div class="timeline-evento">PDF recebido</div>
+        </div>
+
+        <div class="timeline-step">
+            <div class="timeline-hora">18/06 09:15</div>
+            <div class="timeline-evento">Texto extraído</div>
+        </div>
+
+        <div class="timeline-step">
+            <div class="timeline-hora">18/06 09:16</div>
+            <div class="timeline-evento">Documento classificado</div>
+        </div>
+
+        <div class="timeline-step">
+            <div class="timeline-hora">18/06 09:16</div>
+            <div class="timeline-evento">Conta criada</div>
+        </div>
+
+        <div class="timeline-step">
+            <div class="timeline-hora">18/06 09:16</div>
+            <div class="timeline-evento">Processo documental criado</div>
+        </div>
+
+    </div>
+</section>
+
+
 
     <section class="charts">
         <div class="card chart">
