@@ -127,7 +127,7 @@ pagamentos = abs(df[df["tipo"] == "Pagar"]["valor"].sum()) if not df.empty else 
 saldo = recebimentos - pagamentos
 pendencias = contar_pendencias()
 
-st.sidebar.image("imagens/goia_logo.png", use_container_width=True)
+st.sidebar.markdown("## GOIA")
 
 st.sidebar.page_link("app.py", label="Dashboard", icon="🏠")
 st.sidebar.page_link("pages/1_Importar_Documento.py", label="Importar Documento", icon="📄")
@@ -210,3 +210,4 @@ else:
     st.dataframe(df_view, use_container_width=True, hide_index=True)
 
 st.caption("GOIA Finance Platform · Dashboard nativo Streamlit")
+
