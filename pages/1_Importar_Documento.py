@@ -153,20 +153,9 @@ def extrair_texto_pdf(arquivo):
 def classificar_tipo_documento(texto):
     t = (texto or "").upper()
 
-    if "FICHA DE COMPENSAÇÃO" in t or "BOLETO" in t or "PAGAR PREFERENCIALMENTE" in t or "PAGÁVEL PREFERENCIALMENTE" in t:
-        return "Boleto / Despesa"
-
-    if "COMPROVANTE" in t and ("PIX" in t or "TRANSFERÊNCIA" in t or "TRANSFERENCIA" in t or "PAGAMENTO" in t):
-        return "Comprovante de Pagamento"
-
-    if "EXTRATO" in t and ("SALDO" in t or "LANÇAMENTO" in t or "LANCAMENTO" in t):
-        return "Extrato Bancário"
-
-    if "CADASTRO NACIONAL DA PESSOA JURÍDICA" in t:
-        return "Cartão CNPJ"
-
-    # NF-e / DANFE tem prioridade sobre empenho.
-    # Uma NF-e pode citar nota de empenho nas informações complementares.
+    # Regra central:
+    # O tipo do documento principal tem prioridade sobre referências internas.
+    # Uma NF-e pode citar nota de empenho, processo, licitação ou contrato nas informações complementares.
     if (
         "DANFE" in t
         or "NF-E" in t
@@ -175,18 +164,33 @@ def classificar_tipo_documento(texto):
         or "NOTA FISCAL ELETRONICA" in t
         or "NOTA FISCAL ELETRÔNICA" in t
         or "CHAVE DE ACESSO" in t
+        or "DOCUMENTO AUXILIAR DA NOTA FISCAL" in t
     ):
         return "Nota Fiscal"
+
+    if "FICHA DE COMPENSAÇÃO" in t or "BOLETO" in t or "PAGAR PREFERENCIALMENTE" in t or "PAGÁVEL PREFERENCIALMENTE" in t:
+        return "Boleto / Despesa"
+
+    if "COMPROVANTE" in t and ("PIX" in t or "TRANSFERÊNCIA" in t or "TRANSFERENCIA" in t or "PAGAMENTO" in t or "RECEBIMENTO" in t):
+        if "RECEBEMOS" in t or "RECEBIMENTO" in t:
+            return "Comprovante de Recebimento"
+        return "Comprovante de Pagamento"
+
+    if "EXTRATO" in t and ("SALDO" in t or "LANÇAMENTO" in t or "LANCAMENTO" in t):
+        return "Extrato Bancário"
+
+    if "CADASTRO NACIONAL DA PESSOA JURÍDICA" in t:
+        return "Cartão CNPJ"
 
     if (
         "NOTA DE EMPENHO" in t
-        or "EMPENHO" in t
+        or " EMPENHO " in t
         or "NE00" in t
     ):
         return "Nota de Empenho"
-        return "Nota Fiscal"
 
     return "A classificar"
+
 
 def sugerir_direcao_nf(texto):
     t = (texto or "").upper()
