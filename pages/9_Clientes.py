@@ -86,6 +86,14 @@ def extrair_xml_nfe(conteudo):
 
     return nome.strip(), formatar_cnpj(doc)
 
+
+def valor_apos_rotulo(texto, rotulo):
+    linhas = [x.strip() for x in texto.splitlines() if x.strip()]
+    for i, linha in enumerate(linhas):
+        if linha.upper() == rotulo.upper() and i + 1 < len(linhas):
+            return linhas[i + 1].strip()
+    return ""
+
 def extrair_pdf(conteudo):
     texto = ""
     try:
@@ -93,22 +101,37 @@ def extrair_pdf(conteudo):
         reader = PdfReader(BytesIO(conteudo))
         for page in reader.pages:
             texto += page.extract_text() or ""
+            texto += "\n"
     except Exception:
         texto = ""
+
+    nome = valor_apos_rotulo(texto, "NOME EMPRESARIAL")
+    fantasia = valor_apos_rotulo(texto, "TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)")
+    cep = valor_apos_rotulo(texto, "CEP")
+    municipio = valor_apos_rotulo(texto, "MUNICÍPIO")
+    uf = valor_apos_rotulo(texto, "UF")
+    telefone = valor_apos_rotulo(texto, "TELEFONE")
+    situacao = valor_apos_rotulo(texto, "SITUAÇÃO CADASTRAL")
 
     cnpj = ""
     m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto)
     if m:
         cnpj = formatar_cnpj(m.group())
 
-    nome = ""
-    linhas = [x.strip() for x in texto.splitlines() if x.strip()]
-    for linha in linhas:
-        if len(linha) > 5 and not re.search(r"\d", linha):
-            nome = linha
-            break
+    if not nome:
+        nome = fantasia
 
-    return nome, cnpj
+    return {
+        "nome": nome,
+        "cnpj_cpf": cnpj,
+        "fantasia": fantasia,
+        "cep": cep,
+        "municipio": municipio,
+        "uf": uf,
+        "telefone": telefone,
+        "situacao": situacao,
+        "texto": texto,
+    }
 
 aba1, aba2, aba3 = st.tabs([
     "Clientes cadastrados",
@@ -213,7 +236,20 @@ with aba3:
             nome_sugerido, cnpj_sugerido = extrair_xml_nfe(conteudo)
 
         elif arquivo.name.lower().endswith(".pdf"):
-            nome_sugerido, cnpj_sugerido = extrair_pdf(conteudo)
+            dados_pdf = extrair_pdf(conteudo)
+            nome_sugerido = dados_pdf.get("nome", "")
+            cnpj_sugerido = dados_pdf.get("cnpj_cpf", "")
+            st.write("Dados extraídos do PDF:")
+            st.json({
+                "nome": dados_pdf.get("nome", ""),
+                "cnpj_cpf": dados_pdf.get("cnpj_cpf", ""),
+                "fantasia": dados_pdf.get("fantasia", ""),
+                "cep": dados_pdf.get("cep", ""),
+                "municipio": dados_pdf.get("municipio", ""),
+                "uf": dados_pdf.get("uf", ""),
+                "telefone": dados_pdf.get("telefone", ""),
+                "situacao": dados_pdf.get("situacao", ""),
+            })
 
         elif arquivo.name.lower().endswith(".csv"):
             df = pd.read_csv(BytesIO(conteudo))
