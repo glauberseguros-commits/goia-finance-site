@@ -167,10 +167,11 @@ def tela_login():
 
 preparar_banco()
 
-if not st.session_state.get("logado"):
+if not st.session_state.get("logado") or not st.session_state.get("empresa_id"):
     tela_login()
+    st.stop()
 
-EMPRESA_ID = st.session_state["empresa_id"]
+EMPRESA_ID = st.session_state.get("empresa_id")
 
 def carregar_movimentacoes():
     conn = conectar()
