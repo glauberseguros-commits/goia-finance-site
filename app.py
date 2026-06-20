@@ -103,7 +103,8 @@ body {{
     margin-bottom: 42px;
 }}
 
-.menu-item {{
+.menu-item {
+            text-decoration: none;{
     padding: 14px 16px;
     border-radius: 13px;
     margin-bottom: 10px;
@@ -387,18 +388,18 @@ th {{
 <aside class="sidebar">
     <img class="logo" src="data:image/png;base64,{logo_base64}">
 
-    <div class="menu-item active">Dashboard</div>
-    <div class="menu-item">Importar Documento</div>
-    <div class="menu-item">Clientes</div>
-    <div class="menu-item">Fornecedores</div>
-    <div class="menu-item">Contas a Receber</div>
-    <div class="menu-item">Contas a Pagar</div>
-    <div class="menu-item">Compras</div>
-    <div class="menu-item">Produtos Estoque</div>
-    <div class="menu-item">Vendas</div>
-    <div class="menu-item">Processos Documentais</div>
-    <div class="menu-item">Conciliação Bancária</div>
-    <div class="menu-item">Relatórios</div>
+    <a class="menu-item active" href="/">Dashboard</a>
+    <a class="menu-item" href="/Importar_Documento">Importar Documento</a>
+    <a class="menu-item" href="/Clientes">Clientes</a>
+    <a class="menu-item" href="/Fornecedores">Fornecedores</a>
+    <a class="menu-item" href="/Contas_a_Receber">Contas a Receber</a>
+    <a class="menu-item" href="/Contas_a_Pagar">Contas a Pagar</a>
+    <a class="menu-item" href="/Compras">Compras</a>
+    <a class="menu-item" href="/Produtos_Estoque">Produtos Estoque</a>
+    <a class="menu-item" href="/Vendas">Vendas</a>
+    <a class="menu-item" href="/Processos_Documentais">Processos Documentais</a>
+    <a class="menu-item" href="/Conciliacao_Bancaria">Conciliação Bancária</a>
+    <a class="menu-item" href="/Relatorios">Relatórios</a>
 
     <div class="sidebar-card">
         <div style="font-size:28px;">✦</div>
