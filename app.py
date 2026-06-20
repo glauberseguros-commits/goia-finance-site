@@ -139,7 +139,35 @@ def tela_login():
     <style>
         [data-testid="stSidebar"] {display: none;}
         [data-testid="stHeader"] {background: transparent;}
-        .block-container {max-width: 1180px; padding-top: 55px;}
+        
+.block-container {max-width: 1180px; padding-top: 55px;}
+
+div[data-baseweb="input"] > div {
+    background-color: #ffffff !important;
+    border: 1.5px solid #94a3b8 !important;
+    border-radius: 10px !important;
+}
+
+input {
+    color: #0f172a !important;
+    font-weight: 600 !important;
+}
+
+label {
+    color: #1e293b !important;
+    font-weight: 700 !important;
+}
+
+button[kind="secondary"], button[kind="primary"] {
+    border-radius: 10px !important;
+    border: 1px solid #111827 !important;
+    font-weight: 700 !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    font-weight: 700 !important;
+}
+
         .login-hero {
             background: linear-gradient(135deg, #050816 0%, #111827 55%, #172554 100%);
             border-radius: 28px;
