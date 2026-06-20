@@ -86,7 +86,7 @@ def criar_empresa(nome, cnpj, email, telefone, senha):
 
     conn.commit()
     conn.close()
-    return True, "Empresa cadastrada. Agora acesse o sistema."
+    return True, "Empresa cadastrada. Agora entre na GOIA."
 
 def tela_login():
     st.markdown("""
@@ -126,11 +126,11 @@ def tela_login():
     aba_login, aba_cadastro = st.tabs(["Já tenho conta", "Criar conta"])
 
     with aba_login:
-        st.subheader("Acessar sistema")
+        st.subheader("Entrar na GOIA")
         with st.form("login"):
             cnpj = st.text_input("CNPJ")
             senha = st.text_input("Senha", type="password")
-            acessar = st.form_submit_button("Acessar sistema")
+            acessar = st.form_submit_button("Entrar na GOIA")
 
         if acessar:
             empresa = buscar_empresa(cnpj, senha)
@@ -157,8 +157,8 @@ def tela_login():
         if criar:
             if senha != confirmar:
                 st.error("As senhas não conferem.")
-            elif not nome or not cnpj or not senha:
-                st.error("Preencha nome, CNPJ e senha.")
+            elif not email.strip() or not telefone.strip() or not senha:
+                st.error("Informe e-mail, telefone e senha.")
             else:
                 ok, msg = criar_empresa(nome, cnpj, email, telefone, senha)
                 st.success(msg) if ok else st.warning(msg)
