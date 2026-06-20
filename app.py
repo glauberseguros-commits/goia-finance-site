@@ -104,7 +104,7 @@ body {{
 }}
 
 .menu-item {
-            text-decoration: none;{
+    text-decoration: none;
     padding: 14px 16px;
     border-radius: 13px;
     margin-bottom: 10px;
