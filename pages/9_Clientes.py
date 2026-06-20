@@ -7,7 +7,12 @@ import xml.etree.ElementTree as ET
 from io import BytesIO
 
 DB_PATH = "bd/gofinance.db"
-EMPRESA_ID = 1
+from utils.auth import empresa_logada, exigir_login
+
+exigir_login()
+
+EMPRESA_ID = empresa_logada()
+
 
 st.set_page_config(page_title="Clientes", page_icon="👥", layout="wide")
 

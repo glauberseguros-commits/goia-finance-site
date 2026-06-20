@@ -4,7 +4,12 @@ import pandas as pd
 import sqlite3
 
 DB_PATH = "bd/gofinance.db"
-EMPRESA_ID = 1
+from utils.auth import empresa_logada, exigir_login
+
+exigir_login()
+
+EMPRESA_ID = empresa_logada()
+
 
 st.set_page_config(
     page_title="Central de Investigação",
