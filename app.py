@@ -128,7 +128,7 @@ def exigir_login():
         st.subheader("Entrar na GOIA")
 
         with st.form("form_login"):
-            email = st.text_input("E-mail")
+            cnpj = st.text_input("CNPJ")
             senha = st.text_input("Senha", type="password")
             entrar = st.form_submit_button("Entrar")
 
