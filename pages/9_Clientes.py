@@ -87,11 +87,44 @@ def extrair_xml_nfe(conteudo):
     return nome.strip(), formatar_cnpj(doc)
 
 
+def limpar_espacos_ocr(valor):
+    if not valor:
+        return ""
+    # Corrige textos extraídos como A D M I N I S T R A C A O
+    if valor.count(" ") >= max(3, len(valor) // 4):
+        return valor.replace(" ", "").strip()
+    return valor.strip()
+
 def valor_apos_rotulo(texto, rotulo):
     linhas = [x.strip() for x in texto.splitlines() if x.strip()]
     for i, linha in enumerate(linhas):
         if linha.upper() == rotulo.upper() and i + 1 < len(linhas):
-            return linhas[i + 1].strip()
+            return limpar_espacos_ocr(linhas[i + 1])
+    return ""
+
+def extrair_primeiro_cnpj(texto):
+    # 1) padrão normal
+    m = re.search(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}", texto)
+    if m:
+        return formatar_cnpj(m.group())
+
+    # 2) padrão OCR/PDF com espaços entre caracteres
+    texto_sem_espacos = re.sub(r"\s+", "", texto)
+    m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_sem_espacos)
+    if m:
+        return formatar_cnpj(m.group())
+
+    # 3) busca perto do rótulo NÚMERO DE INSCRIÇÃO
+    idx = texto.upper().find("NÚMERO DE INSCRIÇÃO")
+    if idx == -1:
+        idx = texto.upper().find("NUMERO DE INSCRICAO")
+
+    if idx >= 0:
+        trecho = texto[idx:idx + 250]
+        digitos = re.sub(r"\D", "", trecho)
+        if len(digitos) >= 14:
+            return formatar_cnpj(digitos[:14])
+
     return ""
 
 def extrair_pdf(conteudo):
@@ -113,33 +146,20 @@ def extrair_pdf(conteudo):
     telefone = valor_apos_rotulo(texto, "TELEFONE")
     situacao = valor_apos_rotulo(texto, "SITUAÇÃO CADASTRAL")
 
-    cnpj = ""
-
-    padroes_cnpj = [
-        r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}",
-        r"\d{14}",
-        r"\d{2}\s*\.\s*\d{3}\s*\.\s*\d{3}\s*/\s*\d{4}\s*-\s*\d{2}",
-        r"\d{2}\s+\d{3}\s+\d{3}\s+\d{4}\s+\d{2}",
-    ]
-
-    for padrao in padroes_cnpj:
-        m = re.search(padrao, texto)
-        if m:
-            cnpj = formatar_cnpj(m.group())
-            break
+    cnpj = extrair_primeiro_cnpj(texto)
 
     if not nome:
         nome = fantasia
 
     return {
-        "nome": nome,
+        "nome": limpar_espacos_ocr(nome),
         "cnpj_cpf": cnpj,
-        "fantasia": fantasia,
-        "cep": cep,
-        "municipio": municipio,
-        "uf": uf,
+        "fantasia": limpar_espacos_ocr(fantasia),
+        "cep": formatar_cnpj(cep) if False else re.sub(r"[^0-9-]", "", cep),
+        "municipio": limpar_espacos_ocr(municipio),
+        "uf": limpar_espacos_ocr(uf),
         "telefone": telefone,
-        "situacao": situacao,
+        "situacao": limpar_espacos_ocr(situacao),
         "texto": texto,
     }
 
