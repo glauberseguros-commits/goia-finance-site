@@ -129,6 +129,7 @@ def ultimo_documento():
     return dict(row) if row else None
 
 
+
 df = carregar_movimentacoes()
 
 recebimentos = df[df["tipo"] == "Receber"]["valor"].sum() if not df.empty else 0
@@ -136,8 +137,72 @@ pagamentos = abs(df[df["tipo"] == "Pagar"]["valor"].sum()) if not df.empty else 
 saldo = recebimentos - pagamentos
 pendencias = contar_pendencias()
 
-st.sidebar.markdown("## GOIA")
+conn = conectar()
 
+try:
+    processos_status = pd.read_sql_query("""
+        SELECT status, COUNT(*) AS quantidade
+        FROM processos_documentais
+        WHERE empresa_id = ?
+        GROUP BY status
+    """, conn, params=(EMPRESA_ID,))
+except:
+    processos_status = pd.DataFrame(columns=["status", "quantidade"])
+
+try:
+    docs_por_tipo = pd.read_sql_query("""
+        SELECT tipo_documento, COUNT(*) AS quantidade
+        FROM documentos
+        WHERE empresa_id = ?
+        GROUP BY tipo_documento
+    """, conn, params=(EMPRESA_ID,))
+except:
+    docs_por_tipo = pd.DataFrame(columns=["tipo_documento", "quantidade"])
+
+try:
+    financeiro = pd.read_sql_query("""
+        SELECT 'Vendido' AS indicador, COALESCE(SUM(valor_total),0) AS valor
+        FROM vendas
+        WHERE empresa_id = ?
+        UNION ALL
+        SELECT 'Recebido em banco', COALESCE(SUM(valor),0)
+        FROM movimentos_bancarios
+        WHERE empresa_id = ? AND tipo = 'Crédito'
+        UNION ALL
+        SELECT 'Retido', COALESCE(SUM(valor),0)
+        FROM documentos
+        WHERE empresa_id = ? AND tipo_documento LIKE '%Retenção%'
+        UNION ALL
+        SELECT 'Pago em compras', COALESCE(SUM(valor_total),0)
+        FROM compras
+        WHERE empresa_id = ?
+    """, conn, params=(EMPRESA_ID, EMPRESA_ID, EMPRESA_ID, EMPRESA_ID))
+except:
+    financeiro = pd.DataFrame(columns=["indicador", "valor"])
+
+try:
+    checklist = pd.read_sql_query("""
+        SELECT
+            p.titulo AS processo,
+            SUM(CASE WHEN d.tipo_documento = 'Nota de Empenho' THEN 1 ELSE 0 END) AS nota_empenho,
+            SUM(CASE WHEN d.direcao = 'Nota Fiscal de Compra' THEN 1 ELSE 0 END) AS nf_compra,
+            SUM(CASE WHEN d.direcao = 'Nota Fiscal de Venda' THEN 1 ELSE 0 END) AS nf_venda,
+            SUM(CASE WHEN d.tipo_documento LIKE '%Comprovante%' THEN 1 ELSE 0 END) AS comprovante,
+            SUM(CASE WHEN d.tipo_documento LIKE '%Retenção%' THEN 1 ELSE 0 END) AS retencao,
+            p.status
+        FROM processos_documentais p
+        LEFT JOIN processo_documentos pd ON pd.processo_id = p.id AND pd.empresa_id = p.empresa_id
+        LEFT JOIN documentos d ON d.id = pd.documento_id AND d.empresa_id = p.empresa_id
+        WHERE p.empresa_id = ?
+        GROUP BY p.id
+        ORDER BY p.id DESC
+    """, conn, params=(EMPRESA_ID,))
+except:
+    checklist = pd.DataFrame()
+
+conn.close()
+
+st.sidebar.markdown("## GOIA")
 st.sidebar.page_link("app.py", label="Dashboard", icon="🏠")
 st.sidebar.page_link("pages/1_Importar_Documento.py", label="Importar Documento", icon="📄")
 st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
@@ -149,8 +214,8 @@ st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Docume
 st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
 
 st.title("GOIA Finance Platform")
-st.subheader("Visão executiva document-driven")
-st.caption("Documentos, compras, vendas, contas, conciliações, retenções e processos em uma visão única.")
+st.subheader("Dashboard executivo")
+st.caption("Visão consolidada de documentos, pendências, financeiro, conciliação e completude dos processos.")
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -168,73 +233,48 @@ with col4:
 
 st.divider()
 
-st.subheader("Processo em destaque")
+g1, g2 = st.columns(2)
 
-conn = conectar()
-try:
-    processo = pd.read_sql_query("""
-        SELECT
-            titulo,
-            contraparte_nome,
-            valor_total,
-            valor_recebido,
-            valor_retido,
-            margem_bruta,
-            status,
-            proxima_acao
-        FROM processos_documentais
-        WHERE empresa_id = ?
-        ORDER BY id DESC
-        LIMIT 1
-    """, conn, params=(EMPRESA_ID,))
-except:
-    processo = pd.DataFrame()
-conn.close()
+with g1:
+    st.subheader("Status dos processos")
+    if processos_status.empty:
+        st.info("Sem processos.")
+    else:
+        st.bar_chart(processos_status.set_index("status"))
 
-if processo.empty:
-    st.info("Nenhum processo documental encontrado.")
-else:
-    p0 = processo.iloc[0]
-    c1, c2, c3, c4 = st.columns(4)
-
-    with c1:
-        st.metric("Valor faturado", moeda(p0.get("valor_total", 0)))
-    with c2:
-        st.metric("Recebido em banco", moeda(p0.get("valor_recebido", 0)))
-    with c3:
-        st.metric("Retenção", moeda(p0.get("valor_retido", 0)))
-    with c4:
-        st.metric("Margem", moeda(p0.get("margem_bruta", 0)))
-
-    with st.container(border=True):
-        st.markdown(f"### {p0.get('titulo', 'Processo')}")
-        st.write(f"**Contraparte:** {p0.get('contraparte_nome', '')}")
-        st.write(f"**Status:** {p0.get('status', '')}")
-        st.write(f"**Próxima ação:** {p0.get('proxima_acao', '')}")
+with g2:
+    st.subheader("Documentos recebidos por tipo")
+    if docs_por_tipo.empty:
+        st.info("Sem documentos.")
+    else:
+        st.bar_chart(docs_por_tipo.set_index("tipo_documento"))
 
 st.divider()
 
-st.subheader("Módulos principais")
+st.subheader("Resumo financeiro por etapa")
 
-m1, m2, m3 = st.columns(3)
+if financeiro.empty:
+    st.info("Sem dados financeiros.")
+else:
+    financeiro_view = financeiro.copy()
+    st.bar_chart(financeiro.set_index("indicador"))
 
-with m1:
-    with st.container(border=True):
-        st.markdown("### 📄 Importar Documento")
-        st.write("Entrada única para PDF, XML, imagens, planilhas, extratos, comprovantes e documentos financeiros.")
-        st.page_link("pages/1_Importar_Documento.py", label="Acessar importação")
+    financeiro_view["valor"] = financeiro_view["valor"].apply(moeda)
+    st.dataframe(financeiro_view, width="stretch", hide_index=True)
 
-with m2:
-    with st.container(border=True):
-        st.markdown("### 🗂️ Processos Documentais")
-        st.write("Agrupa documentos, evidências, pendências, compras, vendas, baixas e encerramento.")
-        st.page_link("pages/7_Processos_Documentais.py", label="Acessar processos")
+st.divider()
 
-with m3:
-    with st.container(border=True):
-        st.markdown("### 🏦 Conciliação Bancária")
-        st.write("Valida banco, contas a receber, contas a pagar, comprovantes e retenções.")
-        st.page_link("pages/8_Conciliacao_Bancaria.py", label="Acessar conciliação")
+st.subheader("Completude documental por processo")
+
+if checklist.empty:
+    st.info("Nenhum processo encontrado.")
+else:
+    chk = checklist.copy()
+
+    for col in ["nota_empenho", "nf_compra", "nf_venda", "comprovante", "retencao"]:
+        chk[col] = chk[col].apply(lambda x: "OK" if int(x or 0) > 0 else "Pendente")
+
+    st.dataframe(chk, width="stretch", hide_index=True)
 
 st.divider()
 
@@ -248,4 +288,4 @@ else:
     df_view["valor"] = df_view["valor"].apply(moeda)
     st.dataframe(df_view, width="stretch", hide_index=True)
 
-st.caption("GOIA Finance Platform · Documentos → Evidências → Operação → Conciliação → Encerramento")
+st.caption("GOIA Finance Platform · Dashboard de controle financeiro e documental")
