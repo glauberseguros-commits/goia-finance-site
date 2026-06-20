@@ -389,6 +389,8 @@ th {{
 
     <div class="menu-item active">Dashboard</div>
     <div class="menu-item">Importar Documento</div>
+    <div class="menu-item">Clientes</div>
+    <div class="menu-item">Fornecedores</div>
     <div class="menu-item">Contas a Receber</div>
     <div class="menu-item">Contas a Pagar</div>
     <div class="menu-item">Compras</div>
