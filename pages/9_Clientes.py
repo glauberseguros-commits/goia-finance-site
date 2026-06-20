@@ -114,9 +114,19 @@ def extrair_pdf(conteudo):
     situacao = valor_apos_rotulo(texto, "SITUAÇÃO CADASTRAL")
 
     cnpj = ""
-    m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto)
-    if m:
-        cnpj = formatar_cnpj(m.group())
+
+    padroes_cnpj = [
+        r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}",
+        r"\d{14}",
+        r"\d{2}\s*\.\s*\d{3}\s*\.\s*\d{3}\s*/\s*\d{4}\s*-\s*\d{2}",
+        r"\d{2}\s+\d{3}\s+\d{3}\s+\d{4}\s+\d{2}",
+    ]
+
+    for padrao in padroes_cnpj:
+        m = re.search(padrao, texto)
+        if m:
+            cnpj = formatar_cnpj(m.group())
+            break
 
     if not nome:
         nome = fantasia
@@ -268,5 +278,10 @@ with aba3:
             confirmar = st.form_submit_button("Cadastrar cliente a partir do documento")
 
         if confirmar:
-            ok, msg = salvar_cliente(nome_doc.strip(), formatar_cnpj(cnpj_doc), f"Documento: {arquivo.name}")
-            st.success(msg) if ok else st.warning(msg)
+            cnpj_final = formatar_cnpj(cnpj_doc)
+
+            if not cnpj_final:
+                st.error("Cadastro bloqueado: nenhum CNPJ/CPF foi identificado no documento.")
+            else:
+                ok, msg = salvar_cliente(nome_doc.strip(), cnpj_final, f"Documento: {arquivo.name}")
+                st.success(msg) if ok else st.warning(msg)
