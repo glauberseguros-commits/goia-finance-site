@@ -7,8 +7,11 @@ from pypdf import PdfReader
 from datetime import datetime
 
 DB_PATH = "bd/gofinance.db"
-CNPJ_EMPRESA = "28.860.122/0001-77"
-EMPRESA_ID_ATIVA = 1
+
+from utils.auth import empresa_logada, exigir_login
+
+exigir_login()
+EMPRESA_ID_ATIVA = empresa_logada()
 
 st.set_page_config(
     page_title="Importar Documento",
@@ -25,10 +28,23 @@ arquivos = st.file_uploader(
     accept_multiple_files=True
 )
 
-arquivo = arquivos[0] if arquivos else None
+arquivo = None
 
-if arquivos and len(arquivos) > 1:
-    st.info(f"{len(arquivos)} documentos selecionados. Nesta versão, o sistema processa um por vez para evitar cadastro em lote sem revisão.")
+if arquivos:
+    if len(arquivos) == 1:
+        arquivo = arquivos[0]
+    else:
+        nomes_arquivos = [a.name for a in arquivos]
+        nome_escolhido = st.selectbox(
+            "Escolha qual documento deseja processar agora",
+            nomes_arquivos
+        )
+        arquivo = next(a for a in arquivos if a.name == nome_escolhido)
+
+        st.info(
+            f"{len(arquivos)} documentos selecionados. "
+            "Escolha um documento por vez para revisar a classificação antes de gravar no ERP."
+        )
 
 
 # =========================
@@ -37,6 +53,29 @@ if arquivos and len(arquivos) > 1:
 
 def conectar():
     return sqlite3.connect(DB_PATH)
+
+def obter_cnpj_empresa_logada():
+    conn = conectar()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT cnpj
+            FROM empresas
+            WHERE id = ?
+        """, (EMPRESA_ID_ATIVA,))
+        row = cur.fetchone()
+    except Exception:
+        row = None
+
+    conn.close()
+
+    if row and row[0]:
+        return normalizar_cnpj(row[0])
+
+    return ""
+
+CNPJ_EMPRESA = obter_cnpj_empresa_logada()
 
 def normalizar_cnpj(cnpj):
     numeros = re.sub(r"\D", "", cnpj or "")
