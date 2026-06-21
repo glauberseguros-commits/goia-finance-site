@@ -457,12 +457,12 @@ def analisar_documento(texto):
         destinatario_doc = partes.get("destinatario_doc") or ""
         destinatario_nome = partes.get("destinatario_nome") or ""
 
-        if emitente_doc == DOC_EMPRESA_LOGADA:
+        if emitente_doc == DOC_EMPRESA_LOGADA and destinatario_doc and destinatario_nome:
             direcao = "Nota Fiscal de Venda"
             parte_doc = destinatario_doc
             parte_nome = destinatario_nome
 
-        elif destinatario_doc == DOC_EMPRESA_LOGADA:
+        elif destinatario_doc == DOC_EMPRESA_LOGADA and emitente_doc and emitente_nome:
             direcao = "Nota Fiscal de Compra"
             parte_doc = emitente_doc
             parte_nome = emitente_nome
