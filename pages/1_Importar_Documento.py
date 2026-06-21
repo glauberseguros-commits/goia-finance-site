@@ -73,7 +73,7 @@ def obter_cnpj_empresa_logada():
 
     try:
         cur.execute("""
-            SELECT cnpj
+            SELECT cnpj_cpf
             FROM empresas
             WHERE id = ?
         """, (EMPRESA_ID_ATIVA,))
