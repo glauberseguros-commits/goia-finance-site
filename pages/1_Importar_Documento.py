@@ -56,23 +56,8 @@ arquivos = st.file_uploader(
     accept_multiple_files=True
 )
 
-arquivo = None
-
 if arquivos:
-    if len(arquivos) == 1:
-        arquivo = arquivos[0]
-    else:
-        nomes_arquivos = [a.name for a in arquivos]
-        nome_escolhido = st.selectbox(
-            "Escolha qual documento deseja processar agora",
-            nomes_arquivos
-        )
-        arquivo = next(a for a in arquivos if a.name == nome_escolhido)
-
-        st.info(
-            f"{len(arquivos)} documentos selecionados. "
-            "Escolha um documento por vez para revisar a classificação antes de gravar no ERP."
-        )
+    st.info(f"{len(arquivos)} documento(s) selecionado(s). O sistema processará todos e classificará cada um no seu devido lugar.")
 
 
 # =========================
@@ -103,13 +88,13 @@ def obter_cnpj_empresa_logada():
 
     return ""
 
-CNPJ_EMPRESA = obter_cnpj_empresa_logada()
-
 def normalizar_cnpj(cnpj):
     numeros = re.sub(r"\D", "", cnpj or "")
     if len(numeros) != 14:
         return cnpj or ""
     return f"{numeros[:2]}.{numeros[2:5]}.{numeros[5:8]}/{numeros[8:12]}-{numeros[12:]}"
+
+CNPJ_EMPRESA = obter_cnpj_empresa_logada()
 
 def encontrar_cnpjs(texto):
     from utils.validadores import validar_cnpj
@@ -611,12 +596,20 @@ def obter_ou_criar_fornecedor(cursor, cnpj, nome):
 
 
 def obter_ou_criar_cliente(cursor, cnpj_cpf, nome):
-    cursor.execute("""
-        SELECT id
-        FROM clientes
-        WHERE cnpj_cpf = ?
-          AND empresa_id = ?
-    """, (cnpj_cpf, EMPRESA_ID_ATIVA))
+    if cnpj_cpf:
+        cursor.execute("""
+            SELECT id
+            FROM clientes
+            WHERE cnpj_cpf = ?
+              AND empresa_id = ?
+        """, (cnpj_cpf, EMPRESA_ID_ATIVA))
+    else:
+        cursor.execute("""
+            SELECT id
+            FROM clientes
+            WHERE nome = ?
+              AND empresa_id = ?
+        """, (nome, EMPRESA_ID_ATIVA))
 
     resultado = cursor.fetchone()
 
@@ -1036,6 +1029,10 @@ def salvar_documento_erp(nome_arquivo, tipo_documento, direcao, parte_cnpj, part
             EMPRESA_ID_ATIVA
         ))
 
+    elif direcao == "Nota de Empenho":
+        if parte_nome:
+            obter_ou_criar_cliente(cursor, parte_cnpj, parte_nome)
+
     elif direcao == "Nota Fiscal de Venda":
         cliente_id = obter_ou_criar_cliente(cursor, parte_cnpj, parte_nome)
         produto_id = obter_ou_criar_produto(cursor, descricao_operacao, custo=0, preco_venda=abs(valor))
@@ -1130,186 +1127,58 @@ def salvar_documento_erp(nome_arquivo, tipo_documento, direcao, parte_cnpj, part
         "processo_id": processo_id
     }
 
+
 # =========================
 # INTERFACE
 # =========================
 
-if arquivo:
-    texto = extrair_texto_pdf(arquivo)
-    analise = analisar_documento(texto)
+if arquivos:
+    processar_todos = st.button("Processar todos os documentos no ERP")
 
-    st.subheader("Triagem do documento")
+    if processar_todos:
+        st.subheader("Resultado do processamento")
 
-    col1, col2, col3 = st.columns(3)
+        for arquivo in arquivos:
+            try:
+                texto = extrair_texto_pdf(arquivo)
+                analise = analisar_documento(texto)
 
-    with col1:
-        st.info(f"Tipo detectado: {analise['tipo_detectado']}")
-
-    with col2:
-        st.info(f"Valor sugerido: R$ {analise['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-
-    with col3:
-        st.info(f"CNPJ identificado: {analise['parte_cnpj'] or 'Não identificado'}")
-
-    if analise["tipo_detectado"] == "Nota Fiscal":
-        st.markdown("### Identificação da NF-e")
-
-        col_nf1, col_nf2 = st.columns(2)
-
-        with col_nf1:
-            st.text_input("Número NF-e", value=analise["numero_nfe"], disabled=True)
-
-        with col_nf2:
-            st.text_input("Série NF-e", value=analise["serie_nfe"], disabled=True)
-
-        st.text_input(
-            "Chave de acesso",
-            value=formatar_chave_acesso(analise["chave_acesso_nfe"]),
-            disabled=True
-        )
-
-    with st.form("triagem_erp"):
-
-        direcao = st.selectbox(
-            "O que este documento representa?",
-            [
-                "Nota Fiscal de Compra",
-                "Nota Fiscal de Venda",
-                "Nota de Empenho",
-                "Boleto / Despesa",
-                "Comprovante de Pagamento",
-                "Comprovante de Recebimento",
-                "Extrato Bancário",
-                "Cartão CNPJ",
-                "A classificar"
-            ],
-            index=[
-                "Nota Fiscal de Compra",
-                "Nota Fiscal de Venda",
-                "Nota de Empenho",
-                "Boleto / Despesa",
-                "Comprovante de Pagamento",
-                "Comprovante de Recebimento",
-                "Extrato Bancário",
-                "Cartão CNPJ",
-                "A classificar"
-            ].index(analise["direcao_sugerida"]) if analise["direcao_sugerida"] in [
-                "Nota Fiscal de Compra",
-                "Nota Fiscal de Venda",
-                "Nota de Empenho",
-                "Boleto / Despesa",
-                "Comprovante de Pagamento",
-                "Comprovante de Recebimento",
-                "Extrato Bancário",
-                "Cartão CNPJ",
-                "A classificar"
-            ] else 7
-        )
-
-        parte_nome = st.text_input(
-            "Fornecedor / Cliente identificado",
-            value=analise["parte_nome"]
-        )
-
-        parte_cnpj = st.text_input(
-            "CNPJ / CPF da outra parte",
-            value=analise["parte_cnpj"]
-        )
-
-        valor = st.number_input(
-            "Valor",
-            min_value=0.0,
-            value=float(analise["valor"]),
-            step=0.01
-        )
-
-        data_emissao = st.text_input(
-            "Data de emissão",
-            value=analise["data_emissao"] or ""
-        )
-
-        data_vencimento = st.text_input(
-            "Data de vencimento",
-            value=analise["data_vencimento"] or ""
-        )
-
-        st.text_area(
-            "Texto extraído",
-            value=texto,
-            height=260
-        )
-
-        confirmar = st.form_submit_button("Processar no ERP")
-
-    if confirmar:
-        resultado = salvar_documento_erp(
-            arquivo.name,
-            analise["tipo_detectado"],
-            direcao,
-            parte_cnpj,
-            parte_nome,
-            valor,
-            data_emissao or None,
-            data_vencimento or None,
-            texto,
-            analise["chave_acesso_nfe"],
-            analise["numero_nfe"],
-            analise["serie_nfe"]
-        )
-
-        doc_id = resultado["documento_id"]
-
-        conn = conectar()
-        cur = conn.cursor()
-
-        processo_id = resultado.get("processo_id")
-
-        pendencias = []
-
-        if processo_id:
-            cur.execute("""
-                SELECT descricao
-                FROM processo_pendencias
-                WHERE processo_id = ?
-                  AND status = 'Pendente'
-                ORDER BY id
-            """, (processo_id,))
-            pendencias = [x[0] for x in cur.fetchall()]
-
-        conn.close()
-
-        if processo_id:
-            st.divider()
-            st.subheader("📌 Processo documental criado")
-
-            st.info(
-                f"Processo ID: {processo_id}"
-            )
-
-            st.write(f"**Contraparte:** {parte_nome}")
-            st.write(f"**Documento:** {arquivo.name}")
-            st.write(f"**Valor:** R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-
-            if pendencias:
-                st.warning("Pendências deste processo")
-
-                for p in pendencias:
-                    st.write(f"• {p}")
-
-                st.caption(
-                    "Estas pendências devem ser resolvidas no próprio fluxo documental."
+                resultado = salvar_documento_erp(
+                    arquivo.name,
+                    analise["tipo_detectado"],
+                    analise["direcao_sugerida"],
+                    analise["parte_cnpj"],
+                    analise["parte_nome"],
+                    analise["valor"],
+                    analise["data_emissao"] or None,
+                    analise["data_vencimento"] or None,
+                    texto,
+                    analise["chave_acesso_nfe"],
+                    analise["numero_nfe"],
+                    analise["serie_nfe"]
                 )
 
-        if resultado["ja_existia"]:
-            st.warning(
-                f"Documento já cadastrado anteriormente. Documento ID: {doc_id}. "
-                "Nenhuma compra, venda, conta a pagar ou conta a receber foi criada novamente."
-            )
-        elif direcao in ["Nota de Empenho", "Comprovante de Pagamento", "Comprovante de Recebimento", "Extrato Bancário", "Cartão CNPJ", "A classificar"]:
-            st.warning(f"Documento salvo para análise. ID: {doc_id}. Ainda não gerou conta financeira automaticamente.")
-        elif direcao == "Nota Fiscal de Compra":
-            st.success(f"Nota fiscal de compra processada. Fornecedor cadastrado e conta a pagar criada. Documento ID: {doc_id}.")
-        elif direcao == "Nota Fiscal de Venda":
-            st.success(f"Nota fiscal de venda processada. Cliente cadastrado e conta a receber criada. Documento ID: {doc_id}.")
-        elif direcao == "Boleto / Despesa":
-            st.success(f"Boleto/despesa processado. Fornecedor cadastrado e conta a pagar criada. Documento ID: {doc_id}.")
+                with st.container(border=True):
+                    st.markdown(f"### 📄 {arquivo.name}")
+                    st.write(f"**Tipo:** {analise['tipo_detectado']}")
+                    st.write(f"**Classificação:** {analise['direcao_sugerida']}")
+                    st.write(f"**Contraparte:** {analise['parte_nome'] or 'Não identificada'}")
+                    st.write(f"**CNPJ/CPF:** {analise['parte_cnpj'] or 'Não identificado'}")
+                    st.write(f"**Valor:** R$ {analise['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+                    if resultado.get("ja_existia"):
+                        st.warning(f"Já existia. Documento ID: {resultado['documento_id']}.")
+                    elif analise["direcao_sugerida"] == "Nota Fiscal de Venda":
+                        st.success(f"Cliente cadastrado, venda e conta a receber criadas. Documento ID: {resultado['documento_id']}.")
+                    elif analise["direcao_sugerida"] == "Nota Fiscal de Compra":
+                        st.success(f"Fornecedor cadastrado, compra e conta a pagar criadas. Documento ID: {resultado['documento_id']}.")
+                    elif analise["direcao_sugerida"] == "Nota de Empenho":
+                        st.success(f"Cliente identificado/cadastrado e processo documental criado. Documento ID: {resultado['documento_id']}.")
+                    else:
+                        st.info(f"Documento salvo para análise. Documento ID: {resultado['documento_id']}.")
+
+            except Exception as e:
+                st.error(f"Erro ao processar {arquivo.name}: {e}")
+
+else:
+    st.info("Anexe um ou mais documentos para iniciar a classificação automática.")
