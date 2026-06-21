@@ -1192,6 +1192,47 @@ if arquivo:
 
         doc_id = resultado["documento_id"]
 
+        conn = conectar()
+        cur = conn.cursor()
+
+        processo_id = resultado.get("processo_id")
+
+        pendencias = []
+
+        if processo_id:
+            cur.execute("""
+                SELECT descricao
+                FROM processo_pendencias
+                WHERE processo_id = ?
+                  AND status = 'Pendente'
+                ORDER BY id
+            """, (processo_id,))
+            pendencias = [x[0] for x in cur.fetchall()]
+
+        conn.close()
+
+        if processo_id:
+            st.divider()
+            st.subheader("📌 Processo documental criado")
+
+            st.info(
+                f"Processo ID: {processo_id}"
+            )
+
+            st.write(f"**Contraparte:** {parte_nome}")
+            st.write(f"**Documento:** {arquivo.name}")
+            st.write(f"**Valor:** R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+            if pendencias:
+                st.warning("Pendências deste processo")
+
+                for p in pendencias:
+                    st.write(f"• {p}")
+
+                st.caption(
+                    "Estas pendências devem ser resolvidas no próprio fluxo documental."
+                )
+
         if resultado["ja_existia"]:
             st.warning(
                 f"Documento já cadastrado anteriormente. Documento ID: {doc_id}. "
