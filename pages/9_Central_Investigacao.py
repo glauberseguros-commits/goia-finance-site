@@ -17,6 +17,16 @@ st.set_page_config(
     layout="wide"
 )
 
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("🧠 Central de Investigação Financeira")
 st.caption("Fila operacional para investigar movimentos bancários, identificar cliente/fornecedor, localizar documentos, sugerir conciliação e apontar pendências.")
 

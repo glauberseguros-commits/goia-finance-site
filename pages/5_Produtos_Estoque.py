@@ -11,6 +11,16 @@ st.set_page_config(
     layout="wide"
 )
 
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("📦 Produtos / Estoque")
 st.caption("Produtos cadastrados, custo, preço de venda e saldo em estoque.")
 

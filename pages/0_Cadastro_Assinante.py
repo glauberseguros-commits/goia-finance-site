@@ -6,6 +6,16 @@ st.set_page_config(
     layout="wide"
 )
 
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("🏢 Criar Conta GOIA")
 st.caption("Cadastre sua empresa para utilizar a plataforma.")
 

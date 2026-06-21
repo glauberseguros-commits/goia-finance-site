@@ -13,6 +13,16 @@ st.set_page_config(
     layout="wide"
 )
 
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("🛒 Compras")
 st.caption("Compras importadas, itens vinculados e origem fiscal.")
 

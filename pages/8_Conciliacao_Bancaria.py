@@ -12,6 +12,16 @@ st.set_page_config(
     layout="wide"
 )
 
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("🔄 Conciliação Bancária")
 st.caption("Cruzamento entre movimentos bancários, contas a pagar e contas a receber.")
 

@@ -19,6 +19,16 @@ st.set_page_config(
     layout="wide"
 )
 
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("📄 Importar Documento Financeiro")
 st.caption("Triagem ERP: compra, venda, despesa, comprovante, extrato e cadastro.")
 

@@ -11,6 +11,16 @@ EMPRESA_ID = empresa_logada()
 
 st.set_page_config(page_title="Clientes", page_icon="👥", layout="wide")
 
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("👥 Clientes")
 st.caption("Clientes identificados automaticamente a partir dos documentos importados.")
 

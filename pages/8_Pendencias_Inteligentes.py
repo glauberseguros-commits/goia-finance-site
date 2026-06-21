@@ -19,6 +19,16 @@ st.set_page_config(
     layout="wide"
 )
 
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 st.title("⚠️ Pendências Inteligentes")
 st.caption("Pendências documentais e financeiras que exigem ação operacional.")
 
