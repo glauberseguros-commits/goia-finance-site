@@ -123,6 +123,49 @@ def criar_empresa(nome, cnpj, email, telefone, senha):
     conn.close()
     return True, "Conta criada. Entrando na GOIA.", empresa_id
 
+
+def formatar_cnpj(valor):
+    numeros = re.sub(r"\D", "", valor or "")
+    if len(numeros) == 14:
+        return f"{numeros[:2]}.{numeros[2:5]}.{numeros[5:8]}/{numeros[8:12]}-{numeros[12:]}"
+    return valor or ""
+
+def extrair_dados_cartao_cnpj_pdf(arquivo):
+    dados = {"nome": "", "cnpj": "", "email": "", "telefone": ""}
+
+    try:
+        from pypdf import PdfReader
+        arquivo.seek(0)
+        reader = PdfReader(BytesIO(arquivo.read()))
+        texto = ""
+        for page in reader.pages:
+            texto += page.extract_text() or ""
+            texto += "\n"
+    except Exception:
+        return dados
+
+    texto_sem_espacos = re.sub(r"\s+", "", texto)
+    m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_sem_espacos)
+    if m:
+        dados["cnpj"] = formatar_cnpj(m.group())
+
+    linhas = [x.strip() for x in texto.splitlines() if x.strip()]
+    for i, linha in enumerate(linhas):
+        if "NOME EMPRESARIAL" in linha.upper() and i + 1 < len(linhas):
+            dados["nome"] = linhas[i + 1].strip()
+            break
+
+    email = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", texto)
+    if email:
+        dados["email"] = email.group()
+
+    telefone = re.search(r"\(?\d{2}\)?\s?\d{4,5}-?\d{4}", texto)
+    if telefone:
+        dados["telefone"] = telefone.group()
+
+    return dados
+
+
 def tela_login():
     st.markdown("""
     <style>
