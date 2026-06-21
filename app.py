@@ -36,16 +36,24 @@ def preparar_banco():
     cur.execute("""
     CREATE TABLE IF NOT EXISTS empresas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        cnpj_cpf TEXT,
-        email TEXT,
-        telefone TEXT,
-        senha_hash TEXT,
-        plano TEXT DEFAULT 'Teste',
-        status_assinatura TEXT DEFAULT 'Ativa',
-        criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        nome TEXT NOT NULL
     )
     """)
+
+    cur.execute("PRAGMA table_info(empresas)")
+    cols = [c[1] for c in cur.fetchall()]
+
+    def add_col(nome, tipo):
+        if nome not in cols:
+            cur.execute(f"ALTER TABLE empresas ADD COLUMN {nome} {tipo}")
+
+    add_col("cnpj_cpf", "TEXT")
+    add_col("email", "TEXT")
+    add_col("telefone", "TEXT")
+    add_col("senha_hash", "TEXT")
+    add_col("plano", "TEXT DEFAULT 'Teste'")
+    add_col("status_assinatura", "TEXT DEFAULT 'Ativa'")
+    add_col("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
 
     conn.commit()
     conn.close()
@@ -72,81 +80,48 @@ def criar_empresa(nome, cnpj, email, telefone, senha):
     conn = conectar()
     cur = conn.cursor()
 
+    cnpj_limpo = limpar_doc(cnpj)
+
     cur.execute("""
-    SELECT id FROM empresas
+    SELECT id, senha_hash
+    FROM empresas
     WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
-    """, (limpar_doc(cnpj),))
+    """, (cnpj_limpo,))
 
-    if cur.fetchone():
+    existente = cur.fetchone()
+
+    if existente:
+        empresa_id, senha_atual = existente
+
+        if senha_atual:
+            conn.close()
+            return False, "CNPJ já possui conta cadastrada.", None
+
+        cur.execute("""
+        UPDATE empresas
+        SET nome = ?, cnpj_cpf = ?, email = ?, telefone = ?, senha_hash = ?,
+            status_assinatura = COALESCE(status_assinatura, 'Ativa')
+        WHERE id = ?
+        """, (nome, cnpj, email, telefone, hash_senha(senha), empresa_id))
+
+        conn.commit()
         conn.close()
-        return False, "CNPJ já cadastrado."
+        return True, "Conta criada. Entrando na GOIA.", empresa_id
 
     cur.execute("""
-    INSERT INTO empresas (nome, cnpj_cpf, email, telefone, senha_hash)
-    VALUES (?, ?, ?, ?, ?)
-    """, (nome, cnpj, email, telefone, hash_senha(senha)))
+    INSERT INTO empresas (
+        nome, cnpj_cpf, email, telefone, senha_hash, plano, status_assinatura
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        nome, cnpj, email, telefone, hash_senha(senha), "Teste", "Ativa"
+    ))
+
+    empresa_id = cur.lastrowid
 
     conn.commit()
     conn.close()
-    return True, "Empresa cadastrada. Agora acesse o sistema."
-
-
-def formatar_cnpj(valor):
-    n = limpar_doc(valor)
-    if len(n) == 14:
-        return f"{n[:2]}.{n[2:5]}.{n[5:8]}/{n[8:12]}-{n[12:]}"
-    return valor or ""
-
-def limpar_espacos_ocr(valor):
-    if not valor:
-        return ""
-    if valor.count(" ") >= max(3, len(valor) // 4):
-        return valor.replace(" ", "").strip()
-    return valor.strip()
-
-def valor_apos_rotulo(texto, rotulo):
-    linhas = [x.strip() for x in texto.splitlines() if x.strip()]
-    for i, linha in enumerate(linhas):
-        if linha.upper() == rotulo.upper() and i + 1 < len(linhas):
-            return limpar_espacos_ocr(linhas[i + 1])
-    return ""
-
-def extrair_dados_cartao_cnpj_pdf(arquivo):
-    dados = {"nome": "", "cnpj": "", "email": "", "telefone": ""}
-
-    try:
-        from pypdf import PdfReader
-        arquivo.seek(0)
-        reader = PdfReader(BytesIO(arquivo.read()))
-        texto = ""
-        for page in reader.pages:
-            texto += page.extract_text() or ""
-            texto += "\n"
-    except Exception:
-        return dados
-
-    nome = valor_apos_rotulo(texto, "NOME EMPRESARIAL")
-    cnpj = ""
-
-    texto_sem_espacos = re.sub(r"\s+", "", texto)
-    m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_sem_espacos)
-    if m:
-        cnpj = formatar_cnpj(m.group())
-
-    texto_normal = re.sub(r"\s+", " ", texto)
-
-    email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", texto_normal)
-    if email_match:
-        dados["email"] = email_match.group()
-
-    tel_match = re.search(r"\(?\d{2}\)?\s?\d{4,5}-?\d{4}", texto_normal)
-    if tel_match:
-        dados["telefone"] = tel_match.group()
-
-    dados["nome"] = nome
-    dados["cnpj"] = cnpj
-    return dados
-
+    return True, "Conta criada. Entrando na GOIA.", empresa_id
 
 def tela_login():
     st.markdown("""
@@ -262,8 +237,16 @@ def tela_login():
             elif not email.strip() or not telefone.strip() or not senha:
                 st.error("Informe e-mail, telefone e senha.")
             else:
-                ok, msg = criar_empresa(nome_oficial, cnpj_oficial, email, telefone, senha)
-                st.success(msg) if ok else st.warning(msg)
+                ok, msg, empresa_id = criar_empresa(nome_oficial, cnpj_oficial, email, telefone, senha)
+
+                if ok:
+                    st.session_state["logado"] = True
+                    st.session_state["empresa_id"] = empresa_id
+                    st.session_state["empresa_nome"] = nome_oficial
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.warning(msg)
 
     st.stop()
 
