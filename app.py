@@ -5,6 +5,7 @@ from pathlib import Path
 from io import BytesIO
 import pandas as pd
 import streamlit as st
+from utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido, formatar_telefone
 
 DB_PATH = Path("bd/gofinance.db")
 
@@ -70,7 +71,7 @@ def buscar_empresa(cnpj, senha):
       AND senha_hash = ?
       AND COALESCE(status_assinatura, 'Ativa') = 'Ativa'
     LIMIT 1
-    """, (limpar_doc(cnpj), hash_senha(senha)))
+    """, (limpar_cnpj(cnpj), hash_senha(senha)))
 
     row = cur.fetchone()
     conn.close()
@@ -80,7 +81,7 @@ def criar_empresa(nome, cnpj, email, telefone, senha):
     conn = conectar()
     cur = conn.cursor()
 
-    cnpj_limpo = limpar_doc(cnpj)
+    cnpj_limpo = limpar_cnpj(cnpj)
 
     cur.execute("""
     SELECT id, senha_hash
@@ -102,7 +103,7 @@ def criar_empresa(nome, cnpj, email, telefone, senha):
         SET nome = ?, cnpj_cpf = ?, email = ?, telefone = ?, senha_hash = ?,
             status_assinatura = COALESCE(status_assinatura, 'Ativa')
         WHERE id = ?
-        """, (nome, cnpj, email, telefone, hash_senha(senha), empresa_id))
+        """, (nome, cnpj_limpo, email, limpar_telefone(telefone), hash_senha(senha), empresa_id))
 
         conn.commit()
         conn.close()
@@ -263,7 +264,7 @@ def tela_login():
             )
 
             email = st.text_input("E-mail de acesso", value=dados_doc.get("email", ""))
-            telefone = st.text_input("Telefone / WhatsApp", value=dados_doc.get("telefone", ""))
+            telefone = st.text_input("Telefone / WhatsApp", value=formatar_telefone(dados_doc.get("telefone", "")), help="Digite DDD + número. Exemplo: (61) 99987-8710")
             senha = st.text_input("Senha", type="password")
             confirmar = st.text_input("Confirmar senha", type="password")
 
@@ -279,6 +280,8 @@ def tela_login():
                 st.error("As senhas não conferem.")
             elif not email.strip() or not telefone.strip() or not senha:
                 st.error("Informe e-mail, telefone e senha.")
+            elif not telefone_valido(telefone):
+                st.error("Telefone inválido. Informe DDD + número, exemplo: (61) 99987-8710.")
             else:
                 ok, msg, empresa_id = criar_empresa(nome_oficial, cnpj_oficial, email, telefone, senha)
 
