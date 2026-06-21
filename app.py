@@ -337,8 +337,7 @@ def tela_login():
 
             criar = st.button(
                 "Criar conta",
-                disabled=(not documento_valido or (empresa_existente is not None and empresa_existente.get("senha_hash"))),
-                type="primary"
+                disabled=(not documento_valido or (empresa_existente is not None and empresa_existente.get("senha_hash")))
             )
 
         if criar:
