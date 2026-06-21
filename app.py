@@ -87,6 +87,26 @@ def preparar_banco():
     conn.commit()
     conn.close()
 
+
+def empresa_existe_por_cnpj(cnpj):
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT id, nome
+    FROM empresas
+    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+    LIMIT 1
+    """, (limpar_cnpj(cnpj),))
+
+    row = cur.fetchone()
+    conn.close()
+
+    if row:
+        return {"id": row[0], "nome": row[1]}
+
+    return None
+
 def buscar_empresa(cnpj, senha):
     conn = conectar()
     conn.row_factory = sqlite3.Row
@@ -278,6 +298,16 @@ def tela_login():
         nome_oficial = dados_doc.get("nome", "")
         cnpj_oficial = dados_doc.get("cnpj", "")
 
+        empresa_existente = None
+        if documento_valido:
+            empresa_existente = empresa_existe_por_cnpj(cnpj_oficial)
+
+            if empresa_existente:
+                st.warning(
+                    "Este CNPJ já possui conta cadastrada na GOIA. "
+                    "Use a aba 'Já tenho conta' para acessar."
+                )
+
         with st.form("cadastro"):
             st.text_input(
                 "Razão Social identificada no Cartão CNPJ",
@@ -298,12 +328,14 @@ def tela_login():
 
             criar = st.form_submit_button(
                 "Criar conta",
-                disabled=not documento_valido
+                disabled=(not documento_valido or empresa_existente is not None)
             )
 
         if criar:
             if not documento_valido:
                 st.error("Cadastro bloqueado: anexe o Cartão CNPJ oficial.")
+            elif empresa_existente is not None:
+                st.error("Cadastro bloqueado: este CNPJ já possui conta cadastrada.")
             elif senha != confirmar:
                 st.error("As senhas não conferem.")
             elif not email.strip() or not telefone.strip() or not senha:
