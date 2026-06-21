@@ -326,8 +326,12 @@ def tela_login():
                 disabled=True
             )
 
-            email = st.text_input("E-mail de acesso", value=dados_doc.get("email", ""))
-            telefone = st.text_input("Telefone / WhatsApp", value=formatar_telefone(dados_doc.get("telefone", "")), help="Digite DDD + número. Exemplo: (61) 99987-8710")
+            email = st.text_input("E-mail de acesso", value=(dados_doc.get("email") or ""))
+            telefone = st.text_input(
+                "Telefone / WhatsApp",
+                value=formatar_telefone(dados_doc.get("telefone") or ""),
+                help="Digite DDD + número. Exemplo: (61) 99987-8710"
+            )
             senha = st.text_input("Senha", type="password")
             confirmar = st.text_input("Confirmar senha", type="password")
 
