@@ -5,6 +5,7 @@ from pathlib import Path
 from io import BytesIO
 import pandas as pd
 import streamlit as st
+from utils.ui import aplicar_estilo_premium
 from utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido, formatar_telefone
 
 DB_PATH = Path("bd/gofinance.db")
@@ -14,6 +15,8 @@ st.set_page_config(
     page_icon="💰",
     layout="wide"
 )
+
+aplicar_estilo_premium()
 
 
 st.markdown("""

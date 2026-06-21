@@ -1,4 +1,5 @@
 import streamlit as st
+from utils.ui import aplicar_estilo_premium
 import pandas as pd
 import sqlite3
 from utils.financeiro import baixar_conta_receber
@@ -12,6 +13,8 @@ st.set_page_config(
     page_icon="💵",
     layout="wide"
 )
+
+aplicar_estilo_premium()
 
 
 st.markdown("""

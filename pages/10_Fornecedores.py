@@ -1,4 +1,5 @@
 import streamlit as st
+from utils.ui import aplicar_estilo_premium
 import pandas as pd
 import sqlite3
 
@@ -10,6 +11,8 @@ exigir_login()
 EMPRESA_ID = empresa_logada()
 
 st.set_page_config(page_title="Fornecedores", page_icon="🏭", layout="wide")
+
+aplicar_estilo_premium()
 
 
 st.markdown("""

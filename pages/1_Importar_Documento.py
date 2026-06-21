@@ -1,4 +1,5 @@
 import streamlit as st
+from utils.ui import aplicar_estilo_premium
 import re
 import sqlite3
 import pytesseract
@@ -18,6 +19,8 @@ st.set_page_config(
     page_icon="📄",
     layout="wide"
 )
+
+aplicar_estilo_premium()
 
 
 st.markdown("""

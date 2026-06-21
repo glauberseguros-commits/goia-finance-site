@@ -1,10 +1,13 @@
 import streamlit as st
+from utils.ui import aplicar_estilo_premium
 
 st.set_page_config(
     page_title="Cadastro de Assinante",
     page_icon="🏢",
     layout="wide"
 )
+
+aplicar_estilo_premium()
 
 
 st.markdown("""
