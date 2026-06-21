@@ -45,27 +45,11 @@ def menu_goia():
 menu_goia()
 
 st.title("👥 Clientes")
-st.caption("Clientes identificados automaticamente a partir dos documentos importados.")
+st.caption("Cadastro de clientes identificados a partir dos documentos importados.")
 
 
 def conectar():
     return sqlite3.connect(DB_PATH)
-
-
-def moeda(valor):
-    try:
-        return f"R$ {float(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
-        return "R$ 0,00"
-
-
-def data_br(valor):
-    if not valor:
-        return ""
-    try:
-        return pd.to_datetime(valor).strftime("%d/%m/%Y")
-    except Exception:
-        return str(valor)
 
 
 def carregar_clientes():
@@ -80,8 +64,7 @@ def carregar_clientes():
             telefone,
             cidade,
             uf,
-            status,
-            origem_cadastro
+            status
         FROM clientes
         WHERE empresa_id = ?
         ORDER BY nome
@@ -92,79 +75,11 @@ def carregar_clientes():
     return df
 
 
-def carregar_notas_cliente(cliente_id):
-    conn = conectar()
-
-    query = """
-        SELECT
-            numero_nfe,
-            serie_nfe,
-            data_emissao,
-            valor,
-            status_processamento
-        FROM documentos
-        WHERE empresa_id = ?
-          AND direcao = 'Nota Fiscal de Venda'
-          AND (
-              cnpj_destinatario = (
-                  SELECT cnpj_cpf
-                  FROM clientes
-                  WHERE id = ?
-                    AND empresa_id = ?
-              )
-              OR nome_destinatario = (
-                  SELECT nome
-                  FROM clientes
-                  WHERE id = ?
-                    AND empresa_id = ?
-              )
-          )
-        ORDER BY data_emissao DESC
-    """
-
-    df = pd.read_sql_query(
-        query,
-        conn,
-        params=(
-            EMPRESA_ID_ATIVA,
-            cliente_id,
-            EMPRESA_ID_ATIVA,
-            cliente_id,
-            EMPRESA_ID_ATIVA
-        )
-    )
-
-    conn.close()
-    return df
-
-
-def carregar_receber_cliente(cliente_id):
-    conn = conectar()
-
-    query = """
-        SELECT
-            descricao,
-            valor,
-            valor_baixado,
-            data_vencimento,
-            data_baixa,
-            status
-        FROM contas_receber
-        WHERE empresa_id = ?
-          AND cliente_id = ?
-        ORDER BY data_vencimento DESC
-    """
-
-    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA, cliente_id))
-    conn.close()
-    return df
-
-
 clientes = carregar_clientes()
 
 st.subheader("Clientes cadastrados")
 
-busca = st.text_input("Buscar cliente por nome ou CNPJ/CPF")
+busca = st.text_input("Buscar cliente por nome ou CPF/CNPJ")
 
 if busca and not clientes.empty:
     clientes = clientes[
@@ -173,29 +88,25 @@ if busca and not clientes.empty:
     ]
 
 if clientes.empty:
-    st.info("Nenhum cliente cadastrado. Importe documentos financeiros para o sistema classificar clientes automaticamente.")
+    st.info("Nenhum cliente cadastrado.")
     st.stop()
 
-clientes_exibicao = clientes.copy()
-
-clientes_exibicao = clientes_exibicao.rename(columns={
+clientes_exibicao = clientes.rename(columns={
+    "id": "ID",
     "nome": "Nome",
     "cnpj_cpf": "CPF/CNPJ",
     "email": "E-mail",
     "telefone": "Telefone",
     "cidade": "Cidade",
     "uf": "UF",
-    "status": "Status",
-    "origem_cadastro": "Origem"
+    "status": "Status"
 })
 
 st.dataframe(
-    clientes_exibicao.drop(columns=["id"]),
+    clientes_exibicao,
     width="stretch",
     hide_index=True
 )
 
-
 st.divider()
-
-st.caption("Versão 0.3 - Clientes")
+st.caption("Versão 0.4 - Clientes")
