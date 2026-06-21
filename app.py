@@ -56,6 +56,24 @@ def preparar_banco():
     add_col("status_assinatura", "TEXT DEFAULT 'Ativa'")
     add_col("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
 
+    # Normaliza CNPJs já existentes
+    cur.execute("SELECT id, cnpj_cpf FROM empresas")
+    for empresa_id, cnpj in cur.fetchall():
+        if cnpj:
+            cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
+            if cnpj_limpo:
+                cur.execute(
+                    "UPDATE empresas SET cnpj_cpf = ? WHERE id = ?",
+                    (cnpj_limpo, empresa_id)
+                )
+
+    # Impede duas empresas com o mesmo CNPJ preenchido
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_empresas_cnpj_cpf_unico
+    ON empresas(cnpj_cpf)
+    WHERE cnpj_cpf IS NOT NULL AND cnpj_cpf <> ''
+    """)
+
     conn.commit()
     conn.close()
 
