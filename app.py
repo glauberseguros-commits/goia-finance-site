@@ -15,6 +15,16 @@ st.set_page_config(
     layout="wide"
 )
 
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 def conectar():
     return sqlite3.connect(DB_PATH)
 
