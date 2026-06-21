@@ -145,6 +145,18 @@ def tela_login():
 
     with aba_cadastro:
         st.subheader("Cadastrar empresa")
+
+        documento_empresa = st.file_uploader(
+            "Anexar Cartão CNPJ / documento oficial da empresa",
+            type=["pdf", "xml", "csv", "txt"],
+            key="documento_cadastro_empresa"
+        )
+
+        if not documento_empresa:
+            st.warning("Anexe o Cartão CNPJ ou documento oficial da empresa para iniciar o cadastro.")
+        else:
+            st.success(f"Documento anexado: {documento_empresa.name}")
+
         with st.form("cadastro"):
             nome = st.text_input("Razão Social / Nome da empresa")
             cnpj = st.text_input("CNPJ")
