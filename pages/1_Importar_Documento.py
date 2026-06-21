@@ -146,19 +146,43 @@ def extrair_texto_pdf(arquivo):
 def classificar_tipo_documento(texto):
     t = (texto or "").upper()
 
-    if any(x in t for x in ["DANFE", "NF-E", "NFE", "NOTA FISCAL", "CHAVE DE ACESSO", "DOCUMENTO AUXILIAR DA NOTA FISCAL"]):
-        return "Nota Fiscal"
-
-    if "NOTA DE EMPENHO" in t or " NE00" in t or "EMPENHO" in t:
+    if "NOTA DE EMPENHO" in t or "EMPENHO ORIGINAL" in t or " NE00" in t:
         return "Nota de Empenho"
 
-    if "CADASTRO NACIONAL DA PESSOA JURÍDICA" in t:
+    if (
+        "CADASTRO NACIONAL DA PESSOA JURÍDICA" in t
+        or "CADASTRO NACIONAL DA PESSOA JURIDICA" in t
+        or "COMPROVANTE DE INSCRIÇÃO E DE SITUAÇÃO CADASTRAL" in t
+        or "COMPROVANTE DE INSCRICAO E DE SITUACAO CADASTRAL" in t
+    ):
         return "Cartão CNPJ"
+
+    if "DADOS BANCÁRIOS" in t or "DADOS BANCARIOS" in t:
+        return "Dados Bancários"
+
+    if "CARTA DE CORREÇÃO ELETRÔNICA" in t or "CARTA DE CORRECAO ELETRONICA" in t:
+        return "Carta de Correção NF-e"
+
+    if any(x in t for x in [
+        "DANFE",
+        "NF-E",
+        "NFE",
+        "NOTA FISCAL",
+        "CHAVE DE ACESSO",
+        "DOCUMENTO AUXILIAR DA NOTA FISCAL"
+    ]):
+        return "Nota Fiscal"
 
     if "BOLETO" in t or "FICHA DE COMPENSAÇÃO" in t or "PAGÁVEL PREFERENCIALMENTE" in t:
         return "Boleto / Despesa"
 
-    if "COMPROVANTE" in t and any(x in t for x in ["PIX", "TRANSFERÊNCIA", "TRANSFERENCIA", "PAGAMENTO", "RECEBIMENTO"]):
+    if "COMPROVANTE" in t and any(x in t for x in [
+        "PIX",
+        "TRANSFERÊNCIA",
+        "TRANSFERENCIA",
+        "PAGAMENTO",
+        "RECEBIMENTO"
+    ]):
         if "RECEBIMENTO" in t or "RECEBEMOS" in t:
             return "Comprovante de Recebimento"
         return "Comprovante de Pagamento"
@@ -167,7 +191,6 @@ def classificar_tipo_documento(texto):
         return "Extrato Bancário"
 
     return "A classificar"
-
 
 def extrair_chave_acesso_nfe(texto):
     for grupo in re.findall(r"(?:\d{4}\s*){11}", texto or ""):
@@ -246,54 +269,168 @@ def extrair_descricao_produto_nfe(texto):
     return "Documento importado"
 
 
-def extrair_partes_nfe(texto):
-    documentos = encontrar_documentos(texto)
-    t = (texto or "").upper()
+def extrair_documento_do_bloco(bloco):
+    bloco = bloco or ""
 
-    emitente_doc = ""
-    emitente_nome = ""
-    destinatario_doc = ""
-    destinatario_nome = ""
+    padroes = [
+        r"CNPJ\s*/\s*CPF\s*[:\-]?\s*(\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2})",
+        r"CNPJ\s*[:\-]?\s*(\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2})",
+        r"CPF\s*[:\-]?\s*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})",
+        r"\b(\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2})\b",
+        r"\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b",
+    ]
 
-    if DOC_EMPRESA_LOGADA in documentos or somente_numeros(DOC_EMPRESA_LOGADA) in somente_numeros(texto):
-        if "DESTINATÁRIO" in t or "DESTINATARIO" in t:
-            # Se a empresa aparece no documento, a decisão final será feita por blocos/fallback.
-            pass
+    for padrao in padroes:
+        m = re.search(padrao, bloco, flags=re.I)
+        if m:
+            return normalizar_documento(m.group(1))
 
-    for doc in documentos:
-        nome = identificar_nome_por_documento(texto, doc)
+    return ""
 
-        if doc == DOC_EMPRESA_LOGADA:
+
+def extrair_nome_do_bloco(bloco):
+    linhas = [x.strip() for x in (bloco or "").splitlines() if x.strip()]
+
+    ignorar = [
+        "DESTINATÁRIO", "DESTINATARIO", "REMETENTE", "EMITENTE",
+        "NOME / RAZÃO SOCIAL", "NOME / RAZAO SOCIAL",
+        "CNPJ", "CPF", "ENDEREÇO", "ENDERECO", "BAIRRO", "CEP",
+        "MUNICÍPIO", "MUNICIPIO", "UF", "FONE", "FAX",
+        "INSCRIÇÃO ESTADUAL", "INSCRICAO ESTADUAL",
+        "DATA DA EMISSÃO", "DATA DA EMISSAO", "DATA DA SAÍDA", "DATA DA SAIDA",
+    ]
+
+    for linha in linhas:
+        up = linha.upper()
+
+        if any(x in up for x in ignorar):
             continue
 
-        if not destinatario_doc:
-            destinatario_doc = doc
-            destinatario_nome = nome
+        if re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", linha):
+            continue
 
-    # Heurísticas úteis, mas não determinam sozinhas a natureza.
-    if "COMANDO DA MARINHA" in t:
-        destinatario_nome = "COMANDO DA MARINHA"
+        if re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", linha):
+            continue
 
-    if "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO" in t or "ADMINISTRACAO REGIONAL DE SOBRADINHO" in t:
-        destinatario_nome = "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO"
+        if len(linha) >= 5:
+            return " ".join(linha.split())[:140]
 
-    # Se a empresa logada aparece no texto como emitente, é venda.
-    if DOC_EMPRESA_LOGADA and DOC_EMPRESA_LOGADA in documentos:
-        emitente_doc = DOC_EMPRESA_LOGADA
-        emitente_nome = NOME_EMPRESA_LOGADA
+    return ""
 
-    # Fornecedor conhecido por texto.
-    if "PONTO CERTO" in t:
-        emitente_nome = "PONTO CERTO COMERCIO DE FERRAGENS LTDA"
-        emitente_doc = "11.877.694/0001-66"
+
+def extrair_email_do_bloco(bloco):
+    m = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", bloco or "")
+    return m.group(0) if m else ""
+
+
+def extrair_cidade_uf_do_bloco(bloco):
+    linhas = [x.strip() for x in (bloco or "").splitlines() if x.strip()]
+    ufs = "AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO"
+
+    for linha in linhas:
+        m = re.search(rf"\b([A-ZÁÉÍÓÚÂÊÔÃÕÇ\s]+)\s+({ufs})\b", linha.upper())
+        if m:
+            cidade = " ".join(m.group(1).split()).title()
+            uf = m.group(2)
+            return cidade, uf
+
+    return "", ""
+
+
+def cortar_bloco(texto, inicio_tokens, fim_tokens):
+    linhas = [x.rstrip() for x in (texto or "").splitlines()]
+    inicio = None
+
+    for i, linha in enumerate(linhas):
+        up = linha.upper()
+        if any(tok in up for tok in inicio_tokens):
+            inicio = i
+            break
+
+    if inicio is None:
+        return ""
+
+    fim = len(linhas)
+
+    for j in range(inicio + 1, len(linhas)):
+        up = linhas[j].upper()
+        if any(tok in up for tok in fim_tokens):
+            fim = j
+            break
+
+    return "\n".join(linhas[inicio:fim])
+
+
+def extrair_bloco_emitente_nfe(texto):
+    linhas = [x.rstrip() for x in (texto or "").splitlines()]
+
+    # Geralmente o emitente aparece antes de DANFE ou antes do bloco DESTINATÁRIO.
+    idx_dest = None
+    for i, linha in enumerate(linhas):
+        up = linha.upper()
+        if "DESTINATÁRIO" in up or "DESTINATARIO" in up or "REMETENTE" in up:
+            idx_dest = i
+            break
+
+    if idx_dest is not None:
+        trecho = "\n".join(linhas[:idx_dest])
+        return trecho
+
+    return cortar_bloco(
+        texto,
+        ["EMITENTE", "DANFE", "DOCUMENTO AUXILIAR DA", "NF-E", "NFE"],
+        ["DESTINATÁRIO", "DESTINATARIO", "REMETENTE"]
+    )
+
+
+def extrair_bloco_destinatario_nfe(texto):
+    return cortar_bloco(
+        texto,
+        ["DESTINATÁRIO", "DESTINATARIO", "REMETENTE"],
+        [
+            "PAGAMENTOS",
+            "CÁLCULO DO IMPOSTO",
+            "CALCULO DO IMPOSTO",
+            "TRANSPORTADOR",
+            "DADOS DOS PRODUTOS",
+            "DADOS ADICIONAIS"
+        ]
+    )
+
+
+def extrair_cadastro_do_bloco(bloco):
+    cidade, uf = extrair_cidade_uf_do_bloco(bloco)
 
     return {
-        "emitente_doc": emitente_doc,
-        "emitente_nome": emitente_nome,
-        "destinatario_doc": destinatario_doc,
-        "destinatario_nome": destinatario_nome,
+        "doc": extrair_documento_do_bloco(bloco),
+        "nome": extrair_nome_do_bloco(bloco),
+        "email": extrair_email_do_bloco(bloco),
+        "cidade": cidade,
+        "uf": uf,
+        "bloco": bloco,
     }
 
+def extrair_partes_nfe(texto):
+    emitente_bloco = extrair_bloco_emitente_nfe(texto)
+    destinatario_bloco = extrair_bloco_destinatario_nfe(texto)
+
+    emitente = extrair_cadastro_do_bloco(emitente_bloco)
+    destinatario = extrair_cadastro_do_bloco(destinatario_bloco)
+
+    return {
+        "emitente_doc": emitente["doc"],
+        "emitente_nome": emitente["nome"],
+        "emitente_email": emitente["email"],
+        "emitente_cidade": emitente["cidade"],
+        "emitente_uf": emitente["uf"],
+        "destinatario_doc": destinatario["doc"],
+        "destinatario_nome": destinatario["nome"],
+        "destinatario_email": destinatario["email"],
+        "destinatario_cidade": destinatario["cidade"],
+        "destinatario_uf": destinatario["uf"],
+        "emitente_bloco": emitente_bloco,
+        "destinatario_bloco": destinatario_bloco,
+    }
 
 def analisar_documento(texto):
     tipo = classificar_tipo_documento(texto)
@@ -307,6 +444,11 @@ def analisar_documento(texto):
     parte_nome = ""
     direcao = tipo
 
+    emitente_doc = ""
+    emitente_nome = ""
+    destinatario_doc = ""
+    destinatario_nome = ""
+
     if tipo == "Nota Fiscal":
         partes = extrair_partes_nfe(texto)
 
@@ -318,19 +460,17 @@ def analisar_documento(texto):
         if emitente_doc == DOC_EMPRESA_LOGADA:
             direcao = "Nota Fiscal de Venda"
             parte_doc = destinatario_doc
-            parte_nome = destinatario_nome or identificar_nome_por_documento(texto, parte_doc)
+            parte_nome = destinatario_nome
 
         elif destinatario_doc == DOC_EMPRESA_LOGADA:
             direcao = "Nota Fiscal de Compra"
             parte_doc = emitente_doc
-            parte_nome = emitente_nome or identificar_nome_por_documento(texto, parte_doc)
+            parte_nome = emitente_nome
 
         else:
-            # fallback: se não conseguiu separar blocos, assume compra com primeira contraparte externa.
-            externos = [d for d in documentos if d != DOC_EMPRESA_LOGADA]
-            parte_doc = externos[0] if externos else ""
-            parte_nome = identificar_nome_por_documento(texto, parte_doc)
-            direcao = "Nota Fiscal de Compra"
+            direcao = "Nota Fiscal - Conferência necessária"
+            parte_doc = destinatario_doc or emitente_doc
+            parte_nome = destinatario_nome or emitente_nome
 
         valor = extrair_valor_total_nfe(texto)
 
@@ -338,23 +478,30 @@ def analisar_documento(texto):
         t = (texto or "").upper()
         valor = maior_valor(texto)
 
-        if "COMANDO DA MARINHA" in t:
+        if "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO" in t or "ADMINISTRACAO REGIONAL DE SOBRADINHO" in t:
+            parte_nome = "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO"
+        elif "COMANDO DA MARINHA" in t:
             parte_nome = "COMANDO DA MARINHA"
         elif "ESTADO-MAIOR DA ARMADA" in t:
             parte_nome = "ESTADO-MAIOR DA ARMADA"
-        elif "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO" in t or "ADMINISTRACAO REGIONAL DE SOBRADINHO" in t:
-            parte_nome = "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO"
         else:
             parte_nome = "Órgão Público"
 
-        externos = [d for d in documentos if d != DOC_EMPRESA_LOGADA]
-        parte_doc = externos[0] if externos else ""
+        parte_doc = ""
+
+    elif tipo == "Cartão CNPJ":
+        valor = 0
+        docs = encontrar_documentos(texto)
+        parte_doc = docs[0] if docs else ""
+
+        m_nome = re.search(r"NOME EMPRESARIAL\s+(.+)", texto or "", flags=re.I)
+        if m_nome:
+            parte_nome = " ".join(m_nome.group(1).split())[:140]
 
     else:
         valor = maior_valor(texto)
-        externos = [d for d in documentos if d != DOC_EMPRESA_LOGADA]
-        parte_doc = externos[0] if externos else ""
-        parte_nome = identificar_nome_por_documento(texto, parte_doc)
+        parte_doc = ""
+        parte_nome = ""
 
     return {
         "tipo_detectado": tipo,
@@ -368,8 +515,11 @@ def analisar_documento(texto):
         "chave_acesso_nfe": chave,
         "numero_nfe": numero,
         "serie_nfe": serie,
+        "emitente_cnpj": emitente_doc,
+        "emitente_nome": emitente_nome,
+        "destinatario_cnpj": destinatario_doc,
+        "destinatario_nome": destinatario_nome,
     }
-
 
 def obter_ou_criar_cliente(cursor, documento, nome):
     documento = normalizar_documento(documento)
