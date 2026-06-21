@@ -335,9 +335,17 @@ def tela_login():
             senha = st.text_input("Senha", type="password")
             confirmar = st.text_input("Confirmar senha", type="password")
 
+            bloquear_cadastro = False
+
+            if not documento_valido:
+                bloquear_cadastro = True
+
+            if empresa_existente is not None and bool(empresa_existente.get("senha_hash")):
+                bloquear_cadastro = True
+
             criar = st.button(
                 "Criar conta",
-                disabled=(not documento_valido or (empresa_existente is not None and empresa_existente.get("senha_hash")))
+                disabled=bool(bloquear_cadastro)
             )
 
         if criar:
