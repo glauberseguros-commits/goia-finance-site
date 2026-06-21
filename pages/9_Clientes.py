@@ -195,72 +195,7 @@ st.dataframe(
     hide_index=True
 )
 
+
 st.divider()
-st.subheader("Histórico financeiro do cliente")
 
-clientes["nome_exibicao"] = clientes.apply(
-    lambda r: f"{r['nome']} | {r['cnpj_cpf']}" if pd.notna(r["cnpj_cpf"]) and str(r["cnpj_cpf"]).strip() else str(r["nome"]),
-    axis=1
-)
-
-cliente_opcao = st.selectbox(
-    "Selecionar cliente",
-    clientes["nome_exibicao"].tolist()
-)
-
-cliente_id = int(clientes[clientes["nome_exibicao"] == cliente_opcao]["id"].iloc[0])
-
-notas = carregar_notas_cliente(cliente_id)
-receber = carregar_receber_cliente(cliente_id)
-
-st.markdown("### Notas fiscais emitidas")
-
-if notas.empty:
-    st.info("Nenhuma NF-e de venda encontrada para este cliente.")
-else:
-    notas_exibicao = notas.copy()
-    notas_exibicao["data_emissao"] = notas_exibicao["data_emissao"].apply(data_br)
-    notas_exibicao["valor"] = notas_exibicao["valor"].apply(moeda)
-
-    notas_exibicao = notas_exibicao.rename(columns={
-        "numero_nfe": "NF-e",
-        "serie_nfe": "Série",
-        "data_emissao": "Emissão",
-        "valor": "Valor",
-        "status_processamento": "Status"
-    })
-
-    st.dataframe(
-        notas_exibicao,
-        width="stretch",
-        hide_index=True
-    )
-
-st.markdown("### Contas a receber")
-
-if receber.empty:
-    st.info("Nenhuma conta a receber encontrada para este cliente.")
-else:
-    receber_exibicao = receber.copy()
-
-    receber_exibicao["data_vencimento"] = receber_exibicao["data_vencimento"].apply(data_br)
-    receber_exibicao["data_baixa"] = receber_exibicao["data_baixa"].apply(data_br)
-    receber_exibicao["valor"] = receber_exibicao["valor"].apply(moeda)
-    receber_exibicao["valor_baixado"] = receber_exibicao["valor_baixado"].apply(moeda)
-
-    receber_exibicao = receber_exibicao.rename(columns={
-        "descricao": "Descrição",
-        "valor": "Valor",
-        "valor_baixado": "Valor baixado",
-        "data_vencimento": "Vencimento",
-        "data_baixa": "Baixa",
-        "status": "Status"
-    })
-
-    st.dataframe(
-        receber_exibicao,
-        width="stretch",
-        hide_index=True
-    )
-
-st.caption("Versão 0.2 - Clientes multiempresa")
+st.caption("Versão 0.3 - Clientes")
