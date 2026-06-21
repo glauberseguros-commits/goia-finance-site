@@ -313,7 +313,7 @@ def tela_login():
                     "Complete o cadastro para ativar o acesso."
                 )
 
-        with st.form("cadastro"):
+        with st.container(border=True):
             st.text_input(
                 "Razão Social identificada no Cartão CNPJ",
                 value=nome_oficial,
@@ -335,9 +335,10 @@ def tela_login():
             senha = st.text_input("Senha", type="password")
             confirmar = st.text_input("Confirmar senha", type="password")
 
-            criar = st.form_submit_button(
+            criar = st.button(
                 "Criar conta",
-                disabled=(not documento_valido or (empresa_existente is not None and empresa_existente.get("senha_hash")))
+                disabled=(not documento_valido or (empresa_existente is not None and empresa_existente.get("senha_hash"))),
+                type="primary"
             )
 
         if criar:
