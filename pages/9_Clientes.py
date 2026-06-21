@@ -1,19 +1,22 @@
-import streamlit as st
-from utils.ui import aplicar_estilo_premium
-import pandas as pd
 import sqlite3
 
+import pandas as pd
+import streamlit as st
 from utils.auth import empresa_logada, exigir_login
+from utils.ui import aplicar_estilo_premium
 
 DB_PATH = "bd/gofinance.db"
 
 exigir_login()
-EMPRESA_ID = empresa_logada()
+EMPRESA_ID_ATIVA = empresa_logada()
 
-st.set_page_config(page_title="Clientes", page_icon="👥", layout="wide")
+st.set_page_config(
+    page_title="Clientes",
+    page_icon="👥",
+    layout="wide"
+)
 
 aplicar_estilo_premium()
-
 
 st.markdown("""
 <style>
@@ -32,24 +35,29 @@ def menu_goia():
     st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
     st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
     st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+    st.sidebar.page_link("pages/4_Compras.py", label="Compras", icon="🛒")
+    st.sidebar.page_link("pages/5_Produtos_Estoque.py", label="Produtos / Estoque", icon="📦")
+    st.sidebar.page_link("pages/6_Vendas.py", label="Vendas", icon="🧾")
     st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
     st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
 
+
 menu_goia()
-
-
 
 st.title("👥 Clientes")
 st.caption("Clientes identificados automaticamente a partir dos documentos importados.")
 
+
 def conectar():
     return sqlite3.connect(DB_PATH)
 
+
 def moeda(valor):
     try:
-        return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"R$ {float(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return "R$ 0,00"
+
 
 def data_br(valor):
     if not valor:
@@ -57,25 +65,102 @@ def data_br(valor):
     try:
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except Exception:
-        return valor
+        return str(valor)
 
-conn = conectar()
 
-clientes = pd.read_sql_query("""
-SELECT
-    id,
-    nome,
-    cnpj_cpf,
-    cidade,
-    uf,
-    status,
-    origem_cadastro
-FROM clientes
-WHERE empresa_id = ?
-ORDER BY nome
-""", conn, params=(EMPRESA_ID,))
+def carregar_clientes():
+    conn = conectar()
 
-conn.close()
+    query = """
+        SELECT
+            id,
+            nome,
+            cnpj_cpf,
+            email,
+            telefone,
+            cidade,
+            uf,
+            status,
+            origem_cadastro
+        FROM clientes
+        WHERE empresa_id = ?
+        ORDER BY nome
+    """
+
+    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA,))
+    conn.close()
+    return df
+
+
+def carregar_notas_cliente(cliente_id):
+    conn = conectar()
+
+    query = """
+        SELECT
+            numero_nfe,
+            serie_nfe,
+            data_emissao,
+            valor,
+            status_processamento
+        FROM documentos
+        WHERE empresa_id = ?
+          AND direcao = 'Nota Fiscal de Venda'
+          AND (
+              cnpj_destinatario = (
+                  SELECT cnpj_cpf
+                  FROM clientes
+                  WHERE id = ?
+                    AND empresa_id = ?
+              )
+              OR nome_destinatario = (
+                  SELECT nome
+                  FROM clientes
+                  WHERE id = ?
+                    AND empresa_id = ?
+              )
+          )
+        ORDER BY data_emissao DESC
+    """
+
+    df = pd.read_sql_query(
+        query,
+        conn,
+        params=(
+            EMPRESA_ID_ATIVA,
+            cliente_id,
+            EMPRESA_ID_ATIVA,
+            cliente_id,
+            EMPRESA_ID_ATIVA
+        )
+    )
+
+    conn.close()
+    return df
+
+
+def carregar_receber_cliente(cliente_id):
+    conn = conectar()
+
+    query = """
+        SELECT
+            descricao,
+            valor,
+            valor_baixado,
+            data_vencimento,
+            data_baixa,
+            status
+        FROM contas_receber
+        WHERE empresa_id = ?
+          AND cliente_id = ?
+        ORDER BY data_vencimento DESC
+    """
+
+    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA, cliente_id))
+    conn.close()
+    return df
+
+
+clientes = carregar_clientes()
 
 st.subheader("Clientes cadastrados")
 
@@ -89,55 +174,93 @@ if busca and not clientes.empty:
 
 if clientes.empty:
     st.info("Nenhum cliente cadastrado. Importe documentos financeiros para o sistema classificar clientes automaticamente.")
+    st.stop()
+
+clientes_exibicao = clientes.copy()
+
+clientes_exibicao = clientes_exibicao.rename(columns={
+    "nome": "Nome",
+    "cnpj_cpf": "CPF/CNPJ",
+    "email": "E-mail",
+    "telefone": "Telefone",
+    "cidade": "Cidade",
+    "uf": "UF",
+    "status": "Status",
+    "origem_cadastro": "Origem"
+})
+
+st.dataframe(
+    clientes_exibicao.drop(columns=["id"]),
+    width="stretch",
+    hide_index=True
+)
+
+st.divider()
+st.subheader("Histórico financeiro do cliente")
+
+clientes["nome_exibicao"] = clientes.apply(
+    lambda r: f"{r['nome']} | {r['cnpj_cpf']}" if pd.notna(r["cnpj_cpf"]) and str(r["cnpj_cpf"]).strip() else str(r["nome"]),
+    axis=1
+)
+
+cliente_opcao = st.selectbox(
+    "Selecionar cliente",
+    clientes["nome_exibicao"].tolist()
+)
+
+cliente_id = int(clientes[clientes["nome_exibicao"] == cliente_opcao]["id"].iloc[0])
+
+notas = carregar_notas_cliente(cliente_id)
+receber = carregar_receber_cliente(cliente_id)
+
+st.markdown("### Notas fiscais emitidas")
+
+if notas.empty:
+    st.info("Nenhuma NF-e de venda encontrada para este cliente.")
 else:
-    st.dataframe(clientes.drop(columns=["id"]), width="stretch", hide_index=True)
+    notas_exibicao = notas.copy()
+    notas_exibicao["data_emissao"] = notas_exibicao["data_emissao"].apply(data_br)
+    notas_exibicao["valor"] = notas_exibicao["valor"].apply(moeda)
 
-    st.divider()
-    st.subheader("Histórico financeiro do cliente")
+    notas_exibicao = notas_exibicao.rename(columns={
+        "numero_nfe": "NF-e",
+        "serie_nfe": "Série",
+        "data_emissao": "Emissão",
+        "valor": "Valor",
+        "status_processamento": "Status"
+    })
 
-    cliente_nome = st.selectbox("Selecionar cliente", clientes["nome"].tolist())
-    cliente_id = int(clientes[clientes["nome"] == cliente_nome]["id"].iloc[0])
+    st.dataframe(
+        notas_exibicao,
+        width="stretch",
+        hide_index=True
+    )
 
-    conn = conectar()
+st.markdown("### Contas a receber")
 
-    notas = pd.read_sql_query("""
-    SELECT numero_nfe, serie_nfe, data_emissao, valor, status_processamento
-    FROM documentos
-    WHERE empresa_id = ?
-      AND direcao = 'Nota Fiscal de Venda'
-      AND (
-          cnpj_destinatario = (SELECT cnpj_cpf FROM clientes WHERE id = ?)
-          OR nome_destinatario = (SELECT nome FROM clientes WHERE id = ?)
-      )
+if receber.empty:
+    st.info("Nenhuma conta a receber encontrada para este cliente.")
+else:
+    receber_exibicao = receber.copy()
 
-aplicar_estilo_premium()
-    ORDER BY data_emissao DESC
-    """, conn, params=(EMPRESA_ID, cliente_id, cliente_id))
+    receber_exibicao["data_vencimento"] = receber_exibicao["data_vencimento"].apply(data_br)
+    receber_exibicao["data_baixa"] = receber_exibicao["data_baixa"].apply(data_br)
+    receber_exibicao["valor"] = receber_exibicao["valor"].apply(moeda)
+    receber_exibicao["valor_baixado"] = receber_exibicao["valor_baixado"].apply(moeda)
 
-    receber = pd.read_sql_query("""
-    SELECT descricao, valor, valor_baixado, data_vencimento, data_baixa, status
-    FROM contas_receber
-    WHERE empresa_id = ?
-      AND cliente_id = ?
-    ORDER BY data_vencimento DESC
-    """, conn, params=(EMPRESA_ID, cliente_id))
+    receber_exibicao = receber_exibicao.rename(columns={
+        "descricao": "Descrição",
+        "valor": "Valor",
+        "valor_baixado": "Valor baixado",
+        "data_vencimento": "Vencimento",
+        "data_baixa": "Baixa",
+        "status": "Status"
+    })
 
-    conn.close()
+    st.dataframe(
+        receber_exibicao,
+        width="stretch",
+        hide_index=True
+    )
 
-    st.markdown("### Notas fiscais emitidas")
-    if notas.empty:
-        st.info("Nenhuma NF-e de venda encontrada para este cliente.")
-    else:
-        notas["data_emissao"] = notas["data_emissao"].apply(data_br)
-        notas["valor"] = notas["valor"].apply(moeda)
-        st.dataframe(notas, width="stretch", hide_index=True)
-
-    st.markdown("### Contas a receber")
-    if receber.empty:
-        st.info("Nenhuma conta a receber encontrada para este cliente.")
-    else:
-        receber["data_vencimento"] = receber["data_vencimento"].apply(data_br)
-        receber["data_baixa"] = receber["data_baixa"].apply(data_br)
-        receber["valor"] = receber["valor"].apply(moeda)
-        receber["valor_baixado"] = receber["valor_baixado"].apply(moeda)
-        st.dataframe(receber, width="stretch", hide_index=True)
+st.caption("Versão 0.2 - Clientes multiempresa")

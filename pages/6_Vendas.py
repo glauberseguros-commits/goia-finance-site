@@ -3,9 +3,12 @@ from utils.ui import aplicar_estilo_premium
 import pandas as pd
 import sqlite3
 from datetime import date
+from utils.auth import empresa_logada, exigir_login
 
 DB_PATH = "bd/gofinance.db"
-EMPRESA_ID_ATIVA = 1
+
+exigir_login()
+EMPRESA_ID_ATIVA = empresa_logada()
 
 st.set_page_config(
     page_title="Vendas",
@@ -14,7 +17,6 @@ st.set_page_config(
 )
 
 aplicar_estilo_premium()
-
 
 st.markdown("""
 <style>
@@ -33,18 +35,36 @@ def menu_goia():
     st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
     st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
     st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+    st.sidebar.page_link("pages/4_Compras.py", label="Compras", icon="🛒")
+    st.sidebar.page_link("pages/5_Produtos_Estoque.py", label="Produtos / Estoque", icon="📦")
+    st.sidebar.page_link("pages/6_Vendas.py", label="Vendas", icon="🧾")
     st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
     st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
 
+
 menu_goia()
-
-
 
 st.title("🧾 Vendas")
 st.caption("Registrar venda, baixar estoque e gerar conta a receber.")
 
+
 def moeda(valor):
+    try:
+        valor = float(valor or 0)
+    except Exception:
+        valor = 0.0
+
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def numero_br(valor):
+    try:
+        valor = float(valor or 0)
+    except Exception:
+        valor = 0.0
+
+    return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 
 def carregar_produtos():
     conn = sqlite3.connect(DB_PATH)
@@ -85,12 +105,18 @@ def carregar_produtos():
         df["custo_medio"] = pd.to_numeric(df["custo_medio"], errors="coerce").fillna(0)
         df["preco_venda"] = pd.to_numeric(df["preco_venda"], errors="coerce").fillna(0)
         df["saldo_estoque"] = pd.to_numeric(df["saldo_estoque"], errors="coerce").fillna(0)
+        df["categoria"] = df["categoria"].fillna("A classificar")
+        df["descricao"] = df["descricao"].fillna("Produto sem descrição")
 
     return df
+
 
 def obter_ou_criar_cliente(cursor, nome, cnpj_cpf=""):
     nome = (nome or "").strip()
     cnpj_cpf = (cnpj_cpf or "").strip()
+
+    if not nome:
+        nome = "Cliente não identificado"
 
     if cnpj_cpf:
         cursor.execute("""
@@ -103,7 +129,7 @@ def obter_ou_criar_cliente(cursor, nome, cnpj_cpf=""):
         cursor.execute("""
             SELECT id
             FROM clientes
-            WHERE nome = ?
+            WHERE UPPER(TRIM(nome)) = UPPER(TRIM(?))
               AND empresa_id = ?
         """, (nome, EMPRESA_ID_ATIVA))
 
@@ -127,6 +153,7 @@ def obter_ou_criar_cliente(cursor, nome, cnpj_cpf=""):
 
     return cursor.lastrowid
 
+
 def registrar_venda(cliente_nome, cliente_cnpj, produto, quantidade, valor_unitario, data_venda, vencimento):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -134,18 +161,21 @@ def registrar_venda(cliente_nome, cliente_cnpj, produto, quantidade, valor_unita
     try:
         cliente_id = obter_ou_criar_cliente(cursor, cliente_nome, cliente_cnpj)
 
-        descricao = produto["descricao"]
+        descricao = str(produto["descricao"] or "Produto vendido")
         produto_id = int(produto["id"])
-        saldo_atual = float(produto["saldo_estoque"])
-        quantidade = float(quantidade)
-        valor_unitario = float(valor_unitario)
+        saldo_atual = float(produto["saldo_estoque"] or 0)
+        quantidade = float(quantidade or 0)
+        valor_unitario = float(valor_unitario or 0)
         valor_total = quantidade * valor_unitario
 
         if quantidade <= 0:
             raise ValueError("Quantidade deve ser maior que zero.")
 
+        if valor_unitario <= 0:
+            raise ValueError("Valor unitário deve ser maior que zero.")
+
         if quantidade > saldo_atual:
-            raise ValueError(f"Estoque insuficiente. Saldo atual: {saldo_atual}")
+            raise ValueError(f"Estoque insuficiente. Saldo atual: {numero_br(saldo_atual)}")
 
         cursor.execute("""
             INSERT INTO vendas (
@@ -259,6 +289,7 @@ def registrar_venda(cliente_nome, cliente_cnpj, produto, quantidade, valor_unita
     finally:
         conn.close()
 
+
 df_produtos = carregar_produtos()
 
 if df_produtos.empty:
@@ -285,7 +316,9 @@ with st.form("nova_venda"):
     produto_opcao = st.selectbox(
         "Produto",
         produtos_com_estoque["id"].tolist(),
-        format_func=lambda x: produtos_com_estoque[produtos_com_estoque["id"] == x]["descricao"].iloc[0]
+        format_func=lambda x: produtos_com_estoque[
+            produtos_com_estoque["id"] == x
+        ]["descricao"].iloc[0]
     )
 
     produto = produtos_com_estoque[produtos_com_estoque["id"] == produto_opcao].iloc[0]
@@ -293,7 +326,7 @@ with st.form("nova_venda"):
     colp1, colp2, colp3 = st.columns(3)
 
     with colp1:
-        st.info(f"Estoque atual: {produto['saldo_estoque']}")
+        st.info(f"Estoque atual: {numero_br(produto['saldo_estoque'])}")
 
     with colp2:
         st.info(f"Custo médio: {moeda(float(produto['custo_medio']))}")
@@ -313,11 +346,16 @@ with st.form("nova_venda"):
         )
 
     with colv2:
-        preco_padrao = float(produto["preco_venda"]) if float(produto["preco_venda"]) > 0 else float(produto["custo_medio"])
+        preco_padrao = (
+            float(produto["preco_venda"])
+            if float(produto["preco_venda"]) > 0
+            else float(produto["custo_medio"])
+        )
+
         valor_unitario = st.number_input(
             "Valor unitário",
-            min_value=0.0,
-            value=preco_padrao,
+            min_value=0.01,
+            value=max(preco_padrao, 0.01),
             step=0.01
         )
 
@@ -360,6 +398,7 @@ st.divider()
 st.subheader("Produtos disponíveis")
 
 df_exibicao = produtos_com_estoque.copy()
+df_exibicao["saldo_estoque"] = df_exibicao["saldo_estoque"].apply(numero_br)
 df_exibicao["custo_medio"] = df_exibicao["custo_medio"].apply(moeda)
 df_exibicao["preco_venda"] = df_exibicao["preco_venda"].apply(moeda)
 
@@ -387,4 +426,4 @@ st.dataframe(
     hide_index=True
 )
 
-st.caption("Versão 0.1 - Vendas")
+st.caption("Versão 0.2 - Vendas multiempresa")

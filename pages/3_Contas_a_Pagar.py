@@ -4,9 +4,13 @@ import pandas as pd
 import sqlite3
 from utils.financeiro import baixar_conta_pagar
 from datetime import datetime
-from utils.formatadores import formatar_data, formatar_moeda
+from utils.formatadores import formatar_data
+from utils.auth import empresa_logada, exigir_login
 
 DB_PATH = "bd/gofinance.db"
+
+exigir_login()
+EMPRESA_ID_ATIVA = empresa_logada()
 
 st.set_page_config(
     page_title="Contas a Pagar",
@@ -15,7 +19,6 @@ st.set_page_config(
 )
 
 aplicar_estilo_premium()
-
 
 st.markdown("""
 <style>
@@ -37,15 +40,21 @@ def menu_goia():
     st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
     st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
 
+
 menu_goia()
-
-
 
 st.title("💸 Contas a Pagar")
 st.caption("Títulos pendentes, baixados e em aberto.")
 
+
 def moeda(valor):
+    try:
+        valor = float(valor or 0)
+    except Exception:
+        valor = 0.0
+
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 
 def carregar_contas_pagar():
     conn = sqlite3.connect(DB_PATH)
@@ -64,14 +73,20 @@ def carregar_contas_pagar():
             cp.status,
             cp.criado_em
         FROM contas_pagar cp
-        LEFT JOIN fornecedores f ON f.id = cp.fornecedor_id
-        LEFT JOIN documentos d ON d.id = cp.documento_id
+        LEFT JOIN fornecedores f
+            ON f.id = cp.fornecedor_id
+           AND f.empresa_id = cp.empresa_id
+        LEFT JOIN documentos d
+            ON d.id = cp.documento_id
+           AND d.empresa_id = cp.empresa_id
+        WHERE cp.empresa_id = ?
         ORDER BY cp.data_vencimento ASC, cp.id DESC
     """
 
-    df = pd.read_sql_query(query, conn)
+    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA,))
     conn.close()
     return df
+
 
 df = carregar_contas_pagar()
 
@@ -80,18 +95,23 @@ if df.empty:
     st.stop()
 
 df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0)
+df["status"] = df["status"].fillna("Pendente")
 
 hoje = datetime.today().date()
 
+
 def calcular_dias(row):
     data_ref = row["data_vencimento"] or row["data_emissao"]
+
     if not data_ref:
         return 0
+
     try:
-        data = datetime.strptime(data_ref, "%Y-%m-%d").date()
-        return (hoje - data).days
-    except:
+        data = datetime.strptime(str(data_ref), "%Y-%m-%d").date()
+        return max((hoje - data).days, 0)
+    except Exception:
         return 0
+
 
 df["dias_em_aberto"] = df.apply(calcular_dias, axis=1)
 
@@ -136,11 +156,20 @@ if filtro_fornecedor != "Todos":
 
 df_exibicao = df_filtrado.copy()
 
-df_exibicao["origem"] = df_exibicao.apply(
-    lambda r: f"NF-e {r['numero_nfe']}/Série {r['serie_nfe']}" if pd.notna(r["numero_nfe"]) and str(r["numero_nfe"]).strip() else r["documento"],
-    axis=1
-)
 
+def montar_origem(row):
+    numero = row.get("numero_nfe")
+    serie = row.get("serie_nfe")
+
+    if pd.notna(numero) and str(numero).strip():
+        if pd.notna(serie) and str(serie).strip():
+            return f"NF-e {numero}/Série {serie}"
+        return f"NF-e {numero}"
+
+    return row.get("documento", "Documento")
+
+
+df_exibicao["origem"] = df_exibicao.apply(montar_origem, axis=1)
 df_exibicao["valor"] = df_exibicao["valor"].apply(moeda)
 
 for col in ["data_emissao", "data_vencimento", "criado_em"]:

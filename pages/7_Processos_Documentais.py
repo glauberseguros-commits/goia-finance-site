@@ -2,10 +2,13 @@ import streamlit as st
 from utils.ui import aplicar_estilo_premium
 import pandas as pd
 import sqlite3
-from utils.formatadores import formatar_moeda, formatar_data, formatar_cnpj
+from utils.formatadores import formatar_moeda, formatar_data
+from utils.auth import empresa_logada, exigir_login
 
 DB_PATH = "bd/gofinance.db"
-EMPRESA_ID_ATIVA = 1
+
+exigir_login()
+EMPRESA_ID_ATIVA = empresa_logada()
 
 st.set_page_config(
     page_title="Processos Documentais",
@@ -14,7 +17,6 @@ st.set_page_config(
 )
 
 aplicar_estilo_premium()
-
 
 st.markdown("""
 <style>
@@ -33,12 +35,14 @@ def menu_goia():
     st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
     st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
     st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+    st.sidebar.page_link("pages/4_Compras.py", label="Compras", icon="🛒")
+    st.sidebar.page_link("pages/5_Produtos_Estoque.py", label="Produtos / Estoque", icon="📦")
+    st.sidebar.page_link("pages/6_Vendas.py", label="Vendas", icon="🧾")
     st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
     st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
 
+
 menu_goia()
-
-
 
 st.title("🗂️ Processos Documentais")
 st.caption("Controle de documentos, pendências, evidências e encerramento financeiro.")
@@ -86,6 +90,7 @@ def carregar_processos():
     conn.close()
     return df
 
+
 def carregar_documentos(processo_id):
     conn = sqlite3.connect(DB_PATH)
 
@@ -106,6 +111,7 @@ def carregar_documentos(processo_id):
         FROM processo_documentos pd
         LEFT JOIN documentos d
             ON d.id = pd.documento_id
+           AND d.empresa_id = pd.empresa_id
         WHERE pd.processo_id = ?
           AND pd.empresa_id = ?
         ORDER BY pd.id
@@ -114,6 +120,7 @@ def carregar_documentos(processo_id):
     df = pd.read_sql_query(query, conn, params=(processo_id, EMPRESA_ID_ATIVA))
     conn.close()
     return df
+
 
 def carregar_pendencias(processo_id):
     conn = sqlite3.connect(DB_PATH)
@@ -139,6 +146,38 @@ def carregar_pendencias(processo_id):
     conn.close()
     return df
 
+
+def carregar_evidencias(processo_id):
+    conn = sqlite3.connect(DB_PATH)
+
+    query = """
+        SELECT
+            pe.id,
+            pe.tipo_evidencia,
+            pe.descricao,
+            pe.valor,
+            pe.data_evidencia,
+            pe.origem,
+            pe.status,
+            pe.criado_em,
+            d.tipo_documento,
+            d.direcao,
+            d.numero_nfe,
+            d.serie_nfe
+        FROM processo_evidencias pe
+        LEFT JOIN documentos d
+            ON d.id = pe.documento_id
+           AND d.empresa_id = pe.empresa_id
+        WHERE pe.processo_id = ?
+          AND pe.empresa_id = ?
+        ORDER BY pe.id
+    """
+
+    df = pd.read_sql_query(query, conn, params=(processo_id, EMPRESA_ID_ATIVA))
+    conn.close()
+    return df
+
+
 def concluir_pendencia(pendencia_id):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -152,6 +191,7 @@ def concluir_pendencia(pendencia_id):
 
     conn.commit()
     conn.close()
+
 
 def atualizar_status_processo(processo_id):
     conn = sqlite3.connect(DB_PATH)
@@ -186,6 +226,7 @@ def atualizar_status_processo(processo_id):
     conn.commit()
     conn.close()
 
+
 df = carregar_processos()
 
 if df.empty:
@@ -195,6 +236,11 @@ if df.empty:
 df["valor_total"] = pd.to_numeric(df["valor_total"], errors="coerce").fillna(0)
 df["total_pendencias"] = pd.to_numeric(df["total_pendencias"], errors="coerce").fillna(0)
 df["pendencias_abertas"] = pd.to_numeric(df["pendencias_abertas"], errors="coerce").fillna(0)
+df["status"] = df["status"].fillna("Aberto")
+df["tipo_operacao"] = df["tipo_operacao"].fillna("A classificar")
+df["natureza"] = df["natureza"].fillna("A classificar")
+df["proxima_acao"] = df["proxima_acao"].fillna("Sem próxima ação definida")
+
 
 def calcular_situacao_goia(row):
     pendencias = int(row.get("pendencias_abertas", 0) or 0)
@@ -207,6 +253,7 @@ def calcular_situacao_goia(row):
         return "✅ Processo completo"
 
     return "🟡 Aguardando validação"
+
 
 df["situacao_goia"] = df.apply(calcular_situacao_goia, axis=1)
 
@@ -264,6 +311,7 @@ if filtro_natureza != "Todos":
 
 df_exibicao = df_filtrado.copy()
 df_exibicao["valor_total"] = df_exibicao["valor_total"].apply(formatar_moeda)
+df_exibicao["criado_em"] = df_exibicao["criado_em"].fillna("").apply(formatar_data)
 
 df_exibicao = df_exibicao[[
     "id",
@@ -276,7 +324,8 @@ df_exibicao = df_exibicao[[
     "status",
     "situacao_goia",
     "pendencias_abertas",
-    "proxima_acao"
+    "proxima_acao",
+    "criado_em"
 ]]
 
 df_exibicao = df_exibicao.rename(columns={
@@ -290,7 +339,8 @@ df_exibicao = df_exibicao.rename(columns={
     "status": "Status",
     "situacao_goia": "Situação GOIA",
     "pendencias_abertas": "Pendências abertas",
-    "proxima_acao": "Próxima ação"
+    "proxima_acao": "Próxima ação",
+    "criado_em": "Criado em"
 })
 
 st.dataframe(
@@ -335,12 +385,20 @@ if df_docs.empty:
 else:
     df_docs_exibicao = df_docs.copy()
 
-    df_docs_exibicao["origem"] = df_docs_exibicao.apply(
-        lambda r: f"NF-e {r['numero_nfe']}/Série {r['serie_nfe']}" if pd.notna(r["numero_nfe"]) and str(r["numero_nfe"]).strip() else r["tipo_origem"],
-        axis=1
-    )
+    def montar_origem_documento(row):
+        numero = row.get("numero_nfe")
+        serie = row.get("serie_nfe")
 
+        if pd.notna(numero) and str(numero).strip():
+            if pd.notna(serie) and str(serie).strip():
+                return f"NF-e {numero}/Série {serie}"
+            return f"NF-e {numero}"
+
+        return row.get("tipo_origem", "Documento")
+
+    df_docs_exibicao["origem"] = df_docs_exibicao.apply(montar_origem_documento, axis=1)
     df_docs_exibicao["valor"] = pd.to_numeric(df_docs_exibicao["valor"], errors="coerce").fillna(0).apply(formatar_moeda)
+    df_docs_exibicao["data_emissao"] = df_docs_exibicao["data_emissao"].fillna("").apply(formatar_data)
 
     df_docs_exibicao = df_docs_exibicao[[
         "id",
@@ -368,7 +426,69 @@ else:
         hide_index=True
     )
 
-st.markdown("### Pendências e evidências")
+st.markdown("### Evidências vinculadas")
+
+df_evid = carregar_evidencias(processo_id)
+
+if df_evid.empty:
+    st.info("Nenhuma evidência vinculada a este processo.")
+else:
+    df_evid_exibicao = df_evid.copy()
+
+    def montar_origem_evidencia(row):
+        numero = row.get("numero_nfe")
+        serie = row.get("serie_nfe")
+
+        if pd.notna(numero) and str(numero).strip():
+            if pd.notna(serie) and str(serie).strip():
+                return f"NF-e {numero}/Série {serie}"
+            return f"NF-e {numero}"
+
+        origem = row.get("origem")
+        tipo_documento = row.get("tipo_documento")
+
+        if pd.notna(origem) and str(origem).strip():
+            return origem
+
+        if pd.notna(tipo_documento) and str(tipo_documento).strip():
+            return tipo_documento
+
+        return "Evidência"
+
+    df_evid_exibicao["origem_exibicao"] = df_evid_exibicao.apply(montar_origem_evidencia, axis=1)
+    df_evid_exibicao["valor"] = pd.to_numeric(df_evid_exibicao["valor"], errors="coerce").fillna(0).apply(formatar_moeda)
+    df_evid_exibicao["data_evidencia"] = df_evid_exibicao["data_evidencia"].fillna("").apply(formatar_data)
+    df_evid_exibicao["criado_em"] = df_evid_exibicao["criado_em"].fillna("").apply(formatar_data)
+
+    df_evid_exibicao = df_evid_exibicao[[
+        "id",
+        "tipo_evidencia",
+        "descricao",
+        "origem_exibicao",
+        "valor",
+        "data_evidencia",
+        "status",
+        "criado_em"
+    ]]
+
+    df_evid_exibicao = df_evid_exibicao.rename(columns={
+        "id": "ID",
+        "tipo_evidencia": "Tipo",
+        "descricao": "Descrição",
+        "origem_exibicao": "Origem",
+        "valor": "Valor",
+        "data_evidencia": "Data evidência",
+        "status": "Status",
+        "criado_em": "Criado em"
+    })
+
+    st.dataframe(
+        df_evid_exibicao,
+        width="stretch",
+        hide_index=True
+    )
+
+st.markdown("### Pendências")
 
 df_pend = carregar_pendencias(processo_id)
 
@@ -376,7 +496,8 @@ if df_pend.empty:
     st.success("Este processo não possui pendências.")
 else:
     df_pend_exibicao = df_pend.copy()
-    df_pend_exibicao["prazo"] = df_pend_exibicao["prazo"].apply(formatar_data)
+    df_pend_exibicao["prazo"] = df_pend_exibicao["prazo"].fillna("").apply(formatar_data)
+    df_pend_exibicao["criado_em"] = df_pend_exibicao["criado_em"].fillna("").apply(formatar_data)
 
     df_pend_exibicao = df_pend_exibicao[[
         "id",
@@ -384,7 +505,8 @@ else:
         "tipo_evidencia",
         "status",
         "prazo",
-        "documento_id"
+        "documento_id",
+        "criado_em"
     ]]
 
     df_pend_exibicao = df_pend_exibicao.rename(columns={
@@ -393,7 +515,8 @@ else:
         "tipo_evidencia": "Evidência exigida",
         "status": "Status",
         "prazo": "Prazo",
-        "documento_id": "Documento evidência"
+        "documento_id": "Documento evidência",
+        "criado_em": "Criado em"
     })
 
     st.dataframe(
@@ -418,4 +541,4 @@ else:
             st.success("Pendência concluída.")
             st.rerun()
 
-st.caption("Versão 0.1 - Processos Documentais")
+st.caption("Versão 0.2 - Processos Documentais multiempresa")

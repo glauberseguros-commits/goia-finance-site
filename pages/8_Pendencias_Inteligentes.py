@@ -1,18 +1,15 @@
 import sqlite3
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from utils.auth import empresa_logada, exigir_login
 from utils.ui import aplicar_estilo_premium
 
 
 DB_PATH = "bd/gofinance.db"
-from utils.auth import empresa_logada, exigir_login
 
 exigir_login()
-
-EMPRESA_ID = empresa_logada()
-
+EMPRESA_ID_ATIVA = empresa_logada()
 
 st.set_page_config(
     page_title="Pendências Inteligentes",
@@ -21,7 +18,6 @@ st.set_page_config(
 )
 
 aplicar_estilo_premium()
-
 
 st.markdown("""
 <style>
@@ -40,12 +36,14 @@ def menu_goia():
     st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
     st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
     st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+    st.sidebar.page_link("pages/4_Compras.py", label="Compras", icon="🛒")
+    st.sidebar.page_link("pages/5_Produtos_Estoque.py", label="Produtos / Estoque", icon="📦")
+    st.sidebar.page_link("pages/6_Vendas.py", label="Vendas", icon="🧾")
     st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
     st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
 
+
 menu_goia()
-
-
 
 st.title("⚠️ Pendências Inteligentes")
 st.caption("Pendências documentais e financeiras que exigem ação operacional.")
@@ -72,19 +70,21 @@ def carregar_pendencias():
         FROM processo_pendencias pp
         LEFT JOIN processos_documentais pd
             ON pd.id = pp.processo_id
+           AND pd.empresa_id = pp.empresa_id
         WHERE pp.empresa_id = ?
         ORDER BY
             CASE pp.status
                 WHEN 'Pendente' THEN 1
                 WHEN 'Em análise' THEN 2
-                WHEN 'Resolvida' THEN 3
-                ELSE 4
+                WHEN 'Concluída' THEN 3
+                WHEN 'Resolvida' THEN 4
+                ELSE 5
             END,
             pp.id DESC
     """
 
     try:
-        df = pd.read_sql_query(query, conn, params=(EMPRESA_ID,))
+        df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA,))
     except Exception:
         df = pd.DataFrame()
 
@@ -94,7 +94,7 @@ def carregar_pendencias():
 
 def formatar_moeda(valor):
     try:
-        return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"R$ {float(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return "R$ 0,00"
 
@@ -105,10 +105,17 @@ if df.empty:
     st.info("Nenhuma pendência documental encontrada.")
     st.stop()
 
+df["status"] = df["status"].fillna("Pendente")
+df["valor_total"] = pd.to_numeric(df["valor_total"], errors="coerce").fillna(0)
+df["processo"] = df["processo"].fillna("Processo não identificado")
+df["tipo_operacao"] = df["tipo_operacao"].fillna("A classificar")
+df["contraparte_nome"] = df["contraparte_nome"].fillna("Contraparte não identificada")
+df["proxima_acao"] = df["proxima_acao"].fillna("Sem próxima ação definida")
+
 total = len(df)
 pendentes = len(df[df["status"] == "Pendente"])
 em_analise = len(df[df["status"] == "Em análise"])
-resolvidas = len(df[df["status"] == "Resolvida"])
+concluidas = len(df[df["status"].isin(["Concluída", "Resolvida"])])
 
 c1, c2, c3, c4 = st.columns(4)
 
@@ -122,7 +129,7 @@ with c3:
     st.metric("Em análise", em_analise)
 
 with c4:
-    st.metric("Resolvidas", resolvidas)
+    st.metric("Concluídas", concluidas)
 
 st.divider()
 
@@ -130,7 +137,7 @@ st.subheader("Pendências que exigem ação")
 
 filtro_status = st.selectbox(
     "Filtrar por status",
-    ["Todas", "Pendente", "Em análise", "Resolvida"]
+    ["Todas"] + sorted(df["status"].dropna().unique().tolist())
 )
 
 df_view = df.copy()
@@ -154,7 +161,7 @@ df_view = df_view.rename(columns={
 
 st.dataframe(
     df_view,
-    use_container_width=True,
+    width="stretch",
     hide_index=True
 )
 
@@ -162,13 +169,18 @@ st.divider()
 
 st.subheader("Leitura operacional")
 
-for _, row in df.head(5).iterrows():
-    with st.container(border=True):
-        st.markdown(f"### {row['descricao']}")
-        st.write(f"**Processo:** {row['processo']}")
-        st.write(f"**Contraparte:** {row['contraparte_nome']}")
-        st.write(f"**Valor:** {formatar_moeda(row['valor_total'])}")
-        st.write(f"**Evidência esperada:** {row['tipo_evidencia']}")
-        st.warning(f"Próxima ação: {row['proxima_acao']}")
+df_top = df[df["status"].isin(["Pendente", "Em análise"])].head(5)
+
+if df_top.empty:
+    st.success("Não há pendências abertas para ação operacional.")
+else:
+    for _, row in df_top.iterrows():
+        with st.container(border=True):
+            st.markdown(f"### {row['descricao']}")
+            st.write(f"**Processo:** {row['processo']}")
+            st.write(f"**Contraparte:** {row['contraparte_nome']}")
+            st.write(f"**Valor:** {formatar_moeda(row['valor_total'])}")
+            st.write(f"**Evidência esperada:** {row['tipo_evidencia']}")
+            st.warning(f"Próxima ação: {row['proxima_acao']}")
 
 st.caption("GOIA Finance Platform · Pendências Inteligentes")

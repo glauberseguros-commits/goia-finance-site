@@ -1,19 +1,22 @@
-import streamlit as st
-from utils.ui import aplicar_estilo_premium
-import pandas as pd
 import sqlite3
 
+import pandas as pd
+import streamlit as st
 from utils.auth import empresa_logada, exigir_login
+from utils.ui import aplicar_estilo_premium
 
 DB_PATH = "bd/gofinance.db"
 
 exigir_login()
-EMPRESA_ID = empresa_logada()
+EMPRESA_ID_ATIVA = empresa_logada()
 
-st.set_page_config(page_title="Fornecedores", page_icon="🏭", layout="wide")
+st.set_page_config(
+    page_title="Fornecedores",
+    page_icon="🏭",
+    layout="wide"
+)
 
 aplicar_estilo_premium()
-
 
 st.markdown("""
 <style>
@@ -32,24 +35,29 @@ def menu_goia():
     st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
     st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
     st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+    st.sidebar.page_link("pages/4_Compras.py", label="Compras", icon="🛒")
+    st.sidebar.page_link("pages/5_Produtos_Estoque.py", label="Produtos / Estoque", icon="📦")
+    st.sidebar.page_link("pages/6_Vendas.py", label="Vendas", icon="🧾")
     st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
     st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
 
+
 menu_goia()
-
-
 
 st.title("🏭 Fornecedores")
 st.caption("Fornecedores identificados automaticamente a partir dos documentos importados.")
 
+
 def conectar():
     return sqlite3.connect(DB_PATH)
 
+
 def moeda(valor):
     try:
-        return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"R$ {float(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return "R$ 0,00"
+
 
 def data_br(valor):
     if not valor:
@@ -57,28 +65,104 @@ def data_br(valor):
     try:
         return pd.to_datetime(valor).strftime("%d/%m/%Y")
     except Exception:
-        return valor
+        return str(valor)
 
-conn = conectar()
 
-fornecedores = pd.read_sql_query("""
-SELECT
-    id,
-    nome,
-    cnpj,
-    categoria_padrao,
-    email,
-    telefone,
-    cidade,
-    uf,
-    status,
-    origem_cadastro
-FROM fornecedores
-WHERE empresa_id = ?
-ORDER BY nome
-""", conn, params=(EMPRESA_ID,))
+def carregar_fornecedores():
+    conn = conectar()
 
-conn.close()
+    query = """
+        SELECT
+            id,
+            nome,
+            cnpj,
+            categoria_padrao,
+            email,
+            telefone,
+            cidade,
+            uf,
+            status,
+            origem_cadastro
+        FROM fornecedores
+        WHERE empresa_id = ?
+        ORDER BY nome
+    """
+
+    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA,))
+    conn.close()
+    return df
+
+
+def carregar_notas_fornecedor(fornecedor_id):
+    conn = conectar()
+
+    query = """
+        SELECT
+            numero_nfe,
+            serie_nfe,
+            data_emissao,
+            valor,
+            status_processamento
+        FROM documentos
+        WHERE empresa_id = ?
+          AND direcao = 'Nota Fiscal de Compra'
+          AND (
+              cnpj_emitente = (
+                  SELECT cnpj
+                  FROM fornecedores
+                  WHERE id = ?
+                    AND empresa_id = ?
+              )
+              OR nome_emitente = (
+                  SELECT nome
+                  FROM fornecedores
+                  WHERE id = ?
+                    AND empresa_id = ?
+              )
+          )
+        ORDER BY data_emissao DESC
+    """
+
+    df = pd.read_sql_query(
+        query,
+        conn,
+        params=(
+            EMPRESA_ID_ATIVA,
+            fornecedor_id,
+            EMPRESA_ID_ATIVA,
+            fornecedor_id,
+            EMPRESA_ID_ATIVA
+        )
+    )
+
+    conn.close()
+    return df
+
+
+def carregar_pagar_fornecedor(fornecedor_id):
+    conn = conectar()
+
+    query = """
+        SELECT
+            descricao,
+            categoria,
+            valor,
+            valor_baixado,
+            data_vencimento,
+            data_baixa,
+            status
+        FROM contas_pagar
+        WHERE empresa_id = ?
+          AND fornecedor_id = ?
+        ORDER BY data_vencimento DESC
+    """
+
+    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA, fornecedor_id))
+    conn.close()
+    return df
+
+
+fornecedores = carregar_fornecedores()
 
 st.subheader("Fornecedores cadastrados")
 
@@ -92,60 +176,103 @@ if busca and not fornecedores.empty:
 
 if fornecedores.empty:
     st.info("Nenhum fornecedor cadastrado. Importe documentos financeiros para o sistema classificar fornecedores automaticamente.")
+    st.stop()
+
+fornecedores_exibicao = fornecedores.copy()
+
+fornecedores_exibicao = fornecedores_exibicao.rename(columns={
+    "nome": "Nome",
+    "cnpj": "CNPJ/CPF",
+    "categoria_padrao": "Categoria",
+    "email": "E-mail",
+    "telefone": "Telefone",
+    "cidade": "Cidade",
+    "uf": "UF",
+    "status": "Status",
+    "origem_cadastro": "Origem"
+})
+
+st.dataframe(
+    fornecedores_exibicao.drop(columns=["id"]),
+    width="stretch",
+    hide_index=True
+)
+
+st.divider()
+st.subheader("Histórico financeiro do fornecedor")
+
+fornecedores["nome_exibicao"] = fornecedores.apply(
+    lambda r: f"{r['nome']} | {r['cnpj']}" if pd.notna(r["cnpj"]) and str(r["cnpj"]).strip() else str(r["nome"]),
+    axis=1
+)
+
+fornecedor_opcao = st.selectbox(
+    "Selecionar fornecedor",
+    fornecedores["nome_exibicao"].tolist()
+)
+
+fornecedor_id = int(
+    fornecedores[fornecedores["nome_exibicao"] == fornecedor_opcao]["id"].iloc[0]
+)
+
+notas = carregar_notas_fornecedor(fornecedor_id)
+pagar = carregar_pagar_fornecedor(fornecedor_id)
+
+c1, c2, c3 = st.columns(3)
+
+c1.metric("Notas recebidas", moeda(notas["valor"].sum() if not notas.empty else 0))
+c2.metric("Total a pagar", moeda(pagar["valor"].sum() if not pagar.empty else 0))
+c3.metric("Total pago/baixado", moeda(pagar["valor_baixado"].sum() if not pagar.empty else 0))
+
+st.markdown("### Notas fiscais recebidas")
+
+if notas.empty:
+    st.info("Nenhuma NF-e de compra encontrada para este fornecedor.")
 else:
-    st.dataframe(fornecedores.drop(columns=["id"]), width="stretch", hide_index=True)
+    notas_exibicao = notas.copy()
+    notas_exibicao["data_emissao"] = notas_exibicao["data_emissao"].apply(data_br)
+    notas_exibicao["valor"] = notas_exibicao["valor"].apply(moeda)
 
-    st.divider()
-    st.subheader("Histórico financeiro do fornecedor")
+    notas_exibicao = notas_exibicao.rename(columns={
+        "numero_nfe": "NF-e",
+        "serie_nfe": "Série",
+        "data_emissao": "Emissão",
+        "valor": "Valor",
+        "status_processamento": "Status"
+    })
 
-    fornecedor_nome = st.selectbox("Selecionar fornecedor", fornecedores["nome"].tolist())
-    fornecedor_id = int(fornecedores[fornecedores["nome"] == fornecedor_nome]["id"].iloc[0])
+    st.dataframe(
+        notas_exibicao,
+        width="stretch",
+        hide_index=True
+    )
 
-    conn = conectar()
+st.markdown("### Contas a pagar")
 
-    notas = pd.read_sql_query("""
-    SELECT numero_nfe, serie_nfe, data_emissao, valor, status_processamento
-    FROM documentos
-    WHERE empresa_id = ?
-      AND direcao = 'Nota Fiscal de Compra'
-      AND (
-          cnpj_emitente = (SELECT cnpj FROM fornecedores WHERE id = ?)
-          OR nome_emitente = (SELECT nome FROM fornecedores WHERE id = ?)
-      )
+if pagar.empty:
+    st.info("Nenhuma conta a pagar encontrada para este fornecedor.")
+else:
+    pagar_exibicao = pagar.copy()
 
-aplicar_estilo_premium()
-    ORDER BY data_emissao DESC
-    """, conn, params=(EMPRESA_ID, fornecedor_id, fornecedor_id))
+    pagar_exibicao["data_vencimento"] = pagar_exibicao["data_vencimento"].apply(data_br)
+    pagar_exibicao["data_baixa"] = pagar_exibicao["data_baixa"].apply(data_br)
+    pagar_exibicao["valor"] = pagar_exibicao["valor"].apply(moeda)
+    pagar_exibicao["valor_baixado"] = pagar_exibicao["valor_baixado"].apply(moeda)
 
-    pagar = pd.read_sql_query("""
-    SELECT descricao, categoria, valor, valor_baixado, data_vencimento, data_baixa, status
-    FROM contas_pagar
-    WHERE empresa_id = ?
-      AND fornecedor_id = ?
-    ORDER BY data_vencimento DESC
-    """, conn, params=(EMPRESA_ID, fornecedor_id))
+    pagar_exibicao = pagar_exibicao.rename(columns={
+        "descricao": "Descrição",
+        "categoria": "Categoria",
+        "valor": "Valor",
+        "valor_baixado": "Valor baixado",
+        "data_vencimento": "Vencimento",
+        "data_baixa": "Baixa",
+        "status": "Status"
+    })
 
-    conn.close()
+    st.dataframe(
+        pagar_exibicao,
+        width="stretch",
+        hide_index=True
+    )
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Notas recebidas", moeda(notas["valor"].sum() if not notas.empty else 0))
-    c2.metric("Total a pagar", moeda(pagar["valor"].sum() if not pagar.empty else 0))
-    c3.metric("Total pago/baixado", moeda(pagar["valor_baixado"].sum() if not pagar.empty else 0))
-
-    st.markdown("### Notas fiscais recebidas")
-    if notas.empty:
-        st.info("Nenhuma NF-e de compra encontrada para este fornecedor.")
-    else:
-        notas["data_emissao"] = notas["data_emissao"].apply(data_br)
-        notas["valor"] = notas["valor"].apply(moeda)
-        st.dataframe(notas, width="stretch", hide_index=True)
-
-    st.markdown("### Contas a pagar")
-    if pagar.empty:
-        st.info("Nenhuma conta a pagar encontrada para este fornecedor.")
-    else:
-        pagar["data_vencimento"] = pagar["data_vencimento"].apply(data_br)
-        pagar["data_baixa"] = pagar["data_baixa"].apply(data_br)
-        pagar["valor"] = pagar["valor"].apply(moeda)
-        pagar["valor_baixado"] = pagar["valor_baixado"].apply(moeda)
-        st.dataframe(pagar, width="stretch", hide_index=True)
+st.caption("Versão 0.2 - Fornecedores multiempresa")

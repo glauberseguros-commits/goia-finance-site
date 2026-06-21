@@ -2,11 +2,13 @@ import streamlit as st
 from utils.ui import aplicar_estilo_premium
 import pandas as pd
 import sqlite3
-from datetime import datetime
-from utils.formatadores import formatar_data, formatar_moeda
+from utils.formatadores import formatar_data
+from utils.auth import empresa_logada, exigir_login
 
 DB_PATH = "bd/gofinance.db"
-EMPRESA_ID_ATIVA = 1
+
+exigir_login()
+EMPRESA_ID_ATIVA = empresa_logada()
 
 st.set_page_config(
     page_title="Compras",
@@ -15,7 +17,6 @@ st.set_page_config(
 )
 
 aplicar_estilo_premium()
-
 
 st.markdown("""
 <style>
@@ -34,18 +35,26 @@ def menu_goia():
     st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
     st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
     st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+    st.sidebar.page_link("pages/4_Compras.py", label="Compras", icon="🛒")
+    st.sidebar.page_link("pages/6_Vendas.py", label="Vendas", icon="🧾")
     st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
     st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
 
+
 menu_goia()
-
-
 
 st.title("🛒 Compras")
 st.caption("Compras importadas, itens vinculados e origem fiscal.")
 
+
 def moeda(valor):
+    try:
+        valor = float(valor or 0)
+    except Exception:
+        valor = 0.0
+
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 
 def carregar_compras():
     conn = sqlite3.connect(DB_PATH)
@@ -64,8 +73,12 @@ def carregar_compras():
             c.status,
             c.criado_em
         FROM compras c
-        LEFT JOIN fornecedores f ON f.id = c.fornecedor_id
-        LEFT JOIN documentos d ON d.id = c.documento_id
+        LEFT JOIN fornecedores f
+            ON f.id = c.fornecedor_id
+           AND f.empresa_id = c.empresa_id
+        LEFT JOIN documentos d
+            ON d.id = c.documento_id
+           AND d.empresa_id = c.empresa_id
         WHERE c.empresa_id = ?
         ORDER BY c.data_compra DESC, c.id DESC
     """
@@ -74,6 +87,7 @@ def carregar_compras():
     conn.close()
 
     return df
+
 
 def carregar_itens_compra(compra_id):
     conn = sqlite3.connect(DB_PATH)
@@ -87,7 +101,9 @@ def carregar_itens_compra(compra_id):
             ci.valor_unitario,
             ci.valor_total
         FROM compras_itens ci
-        LEFT JOIN produtos p ON p.id = ci.produto_id
+        LEFT JOIN produtos p
+            ON p.id = ci.produto_id
+           AND p.empresa_id = ci.empresa_id
         WHERE ci.compra_id = ?
           AND ci.empresa_id = ?
         ORDER BY ci.id
@@ -98,6 +114,7 @@ def carregar_itens_compra(compra_id):
 
     return df
 
+
 df = carregar_compras()
 
 if df.empty:
@@ -105,6 +122,7 @@ if df.empty:
     st.stop()
 
 df["valor_total"] = pd.to_numeric(df["valor_total"], errors="coerce").fillna(0)
+df["status"] = df["status"].fillna("Aberta")
 
 total_aberto = df[df["status"] == "Aberta"]["valor_total"].sum()
 total_compras = df["valor_total"].sum()
@@ -147,12 +165,25 @@ if filtro_fornecedor != "Todos":
 
 df_exibicao = df_filtrado.copy()
 
-df_exibicao["Origem"] = df_exibicao.apply(
-    lambda r: f"NF-e {r['numero_nfe']}/Série {r['serie_nfe']}" if str(r["numero_nfe"]).strip() else "Documento",
-    axis=1
-)
 
+def montar_origem(row):
+    numero = row.get("numero_nfe")
+    serie = row.get("serie_nfe")
+
+    if str(numero or "").strip():
+        if str(serie or "").strip():
+            return f"NF-e {numero}/Série {serie}"
+        return f"NF-e {numero}"
+
+    return "Documento"
+
+
+df_exibicao["Origem"] = df_exibicao.apply(montar_origem, axis=1)
 df_exibicao["valor_total"] = df_exibicao["valor_total"].apply(moeda)
+
+for col in ["data_compra", "criado_em"]:
+    if col in df_exibicao.columns:
+        df_exibicao[col] = df_exibicao[col].fillna("").apply(formatar_data)
 
 df_exibicao = df_exibicao[[
     "id",
@@ -209,12 +240,12 @@ st.markdown("### Dados fiscais")
 col_nf1, col_nf2 = st.columns(2)
 
 with col_nf1:
-    st.text_input("NF-e", value=compra["numero_nfe"], disabled=True)
+    st.text_input("NF-e", value=str(compra["numero_nfe"] or ""), disabled=True)
 
 with col_nf2:
-    st.text_input("Série", value=compra["serie_nfe"], disabled=True)
+    st.text_input("Série", value=str(compra["serie_nfe"] or ""), disabled=True)
 
-st.text_input("Chave de acesso", value=compra["chave_acesso_nfe"], disabled=True)
+st.text_input("Chave de acesso", value=str(compra["chave_acesso_nfe"] or ""), disabled=True)
 
 st.markdown("### Itens da compra")
 
@@ -224,8 +255,16 @@ if df_itens.empty:
     st.warning("Nenhum item vinculado a esta compra.")
 else:
     df_itens_exibicao = df_itens.copy()
-    df_itens_exibicao["valor_unitario"] = df_itens_exibicao["valor_unitario"].apply(moeda)
-    df_itens_exibicao["valor_total"] = df_itens_exibicao["valor_total"].apply(moeda)
+
+    df_itens_exibicao["valor_unitario"] = pd.to_numeric(
+        df_itens_exibicao["valor_unitario"],
+        errors="coerce"
+    ).fillna(0).apply(moeda)
+
+    df_itens_exibicao["valor_total"] = pd.to_numeric(
+        df_itens_exibicao["valor_total"],
+        errors="coerce"
+    ).fillna(0).apply(moeda)
 
     df_itens_exibicao = df_itens_exibicao.rename(columns={
         "id": "ID",
@@ -242,4 +281,4 @@ else:
         hide_index=True
     )
 
-st.caption("Versão 0.1 - Compras")
+st.caption("Versão 0.2 - Compras multiempresa")
