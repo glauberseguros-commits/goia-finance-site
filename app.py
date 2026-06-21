@@ -93,7 +93,7 @@ def empresa_existe_por_cnpj(cnpj):
     cur = conn.cursor()
 
     cur.execute("""
-    SELECT id, nome
+    SELECT id, nome, senha_hash
     FROM empresas
     WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
     LIMIT 1
@@ -103,7 +103,7 @@ def empresa_existe_por_cnpj(cnpj):
     conn.close()
 
     if row:
-        return {"id": row[0], "nome": row[1]}
+        return {"id": row[0], "nome": row[1], "senha_hash": row[2]}
 
     return None
 
@@ -163,7 +163,7 @@ def criar_empresa(nome, cnpj, email, telefone, senha):
     )
     VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
-        nome, cnpj, email, telefone, hash_senha(senha), "Teste", "Ativa"
+        nome, cnpj_limpo, email, limpar_telefone(telefone), hash_senha(senha), "Teste", "Ativa"
     ))
 
     empresa_id = cur.lastrowid
@@ -302,10 +302,15 @@ def tela_login():
         if documento_valido:
             empresa_existente = empresa_existe_por_cnpj(cnpj_oficial)
 
-            if empresa_existente:
+            if empresa_existente and empresa_existente.get("senha_hash"):
                 st.warning(
                     "Este CNPJ já possui conta cadastrada na GOIA. "
                     "Use a aba 'Já tenho conta' para acessar."
+                )
+            elif empresa_existente and not empresa_existente.get("senha_hash"):
+                st.info(
+                    "Este CNPJ já existe na base, mas ainda não possui senha. "
+                    "Complete o cadastro para ativar o acesso."
                 )
 
         with st.form("cadastro"):
@@ -328,13 +333,13 @@ def tela_login():
 
             criar = st.form_submit_button(
                 "Criar conta",
-                disabled=(not documento_valido or empresa_existente is not None)
+                disabled=(not documento_valido or (empresa_existente is not None and empresa_existente.get("senha_hash")))
             )
 
         if criar:
             if not documento_valido:
                 st.error("Cadastro bloqueado: anexe o Cartão CNPJ oficial.")
-            elif empresa_existente is not None:
+            elif empresa_existente is not None and empresa_existente.get("senha_hash"):
                 st.error("Cadastro bloqueado: este CNPJ já possui conta cadastrada.")
             elif senha != confirmar:
                 st.error("As senhas não conferem.")
