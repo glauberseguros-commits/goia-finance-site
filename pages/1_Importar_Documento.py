@@ -292,31 +292,54 @@ def extrair_nome_do_bloco(bloco):
     linhas = [x.strip() for x in (bloco or "").splitlines() if x.strip()]
 
     ignorar = [
+        "DANFE", "DOCUMENTO AUXILIAR", "NF-E", "NFE",
         "DESTINATÁRIO", "DESTINATARIO", "REMETENTE", "EMITENTE",
         "NOME / RAZÃO SOCIAL", "NOME / RAZAO SOCIAL",
         "CNPJ", "CPF", "ENDEREÇO", "ENDERECO", "BAIRRO", "CEP",
         "MUNICÍPIO", "MUNICIPIO", "UF", "FONE", "FAX",
         "INSCRIÇÃO ESTADUAL", "INSCRICAO ESTADUAL",
         "DATA DA EMISSÃO", "DATA DA EMISSAO", "DATA DA SAÍDA", "DATA DA SAIDA",
+        "CHAVE DE ACESSO", "PROTOCOLO", "AUTORIZAÇÃO", "AUTORIZACAO",
+        "CONSULTA DE AUTENTICIDADE", "WWW.NFE", "WWW.FAZENDA",
+        "NATUREZA DA OPERAÇÃO", "NATUREZA DA OPERACAO",
+        "SÉRIE", "SERIE", "FOLHA", "SAÍDA", "SAIDA", "ENTRADA"
     ]
 
-    for linha in linhas:
+    def linha_valida(linha):
         up = linha.upper()
 
+        if len(linha.strip()) < 5:
+            return False
+
         if any(x in up for x in ignorar):
-            continue
+            return False
 
         if re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", linha):
-            continue
+            return False
 
         if re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", linha):
-            continue
+            return False
 
-        if len(linha) >= 5:
+        if len(re.sub(r"\D", "", linha)) >= 8:
+            return False
+
+        return True
+
+    # 1) Preferência: linha após NOME / RAZÃO SOCIAL.
+    for i, linha in enumerate(linhas):
+        up = linha.upper()
+
+        if "NOME / RAZÃO SOCIAL" in up or "NOME / RAZAO SOCIAL" in up:
+            for prox in linhas[i + 1:i + 6]:
+                if linha_valida(prox):
+                    return " ".join(prox.split())[:140]
+
+    # 2) Fallback: primeira linha textual válida do bloco.
+    for linha in linhas:
+        if linha_valida(linha):
             return " ".join(linha.split())[:140]
 
     return ""
-
 
 def extrair_email_do_bloco(bloco):
     m = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", bloco or "")
@@ -364,7 +387,6 @@ def cortar_bloco(texto, inicio_tokens, fim_tokens):
 def extrair_bloco_emitente_nfe(texto):
     linhas = [x.rstrip() for x in (texto or "").splitlines()]
 
-    # Geralmente o emitente aparece antes de DANFE ou antes do bloco DESTINATÁRIO.
     idx_dest = None
     for i, linha in enumerate(linhas):
         up = linha.upper()
@@ -372,19 +394,27 @@ def extrair_bloco_emitente_nfe(texto):
             idx_dest = i
             break
 
-    if idx_dest is not None:
-        trecho = "\n".join(linhas[:idx_dest])
-        return trecho
+    trecho = "\n".join(linhas[:idx_dest]) if idx_dest is not None else "\n".join(linhas)
 
-    return cortar_bloco(
-        texto,
-        ["EMITENTE", "DANFE", "DOCUMENTO AUXILIAR DA", "NF-E", "NFE"],
-        ["DESTINATÁRIO", "DESTINATARIO", "REMETENTE"]
-    )
+    # Se existir uma linha com CNPJ antes do destinatário, usa uma janela ao redor dela.
+    docs = encontrar_documentos(trecho)
+    if DOC_EMPRESA_LOGADA in docs:
+        doc_ref = DOC_EMPRESA_LOGADA
+    else:
+        doc_ref = docs[0] if docs else ""
 
+    if doc_ref:
+        doc_limpo = somente_numeros(doc_ref)
+        for i, linha in enumerate(trecho.splitlines()):
+            if doc_limpo in somente_numeros(linha):
+                ini = max(0, i - 6)
+                fim = min(len(trecho.splitlines()), i + 8)
+                return "\n".join(trecho.splitlines()[ini:fim])
+
+    return trecho
 
 def extrair_bloco_destinatario_nfe(texto):
-    return cortar_bloco(
+    bloco = cortar_bloco(
         texto,
         ["DESTINATÁRIO", "DESTINATARIO", "REMETENTE"],
         [
@@ -393,10 +423,17 @@ def extrair_bloco_destinatario_nfe(texto):
             "CALCULO DO IMPOSTO",
             "TRANSPORTADOR",
             "DADOS DOS PRODUTOS",
-            "DADOS ADICIONAIS"
+            "DADOS ADICIONAIS",
+            "FATURA",
+            "DUPLICATA"
         ]
     )
 
+    if bloco:
+        return bloco
+
+    # Fallback conservador: se não achou cabeçalho, não inventa destinatário.
+    return ""
 
 def extrair_cadastro_do_bloco(bloco):
     cidade, uf = extrair_cidade_uf_do_bloco(bloco)
