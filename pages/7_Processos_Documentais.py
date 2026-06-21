@@ -22,6 +22,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+def menu_goia():
+    st.sidebar.markdown("## GOIA")
+    st.sidebar.page_link("app.py", label="Dashboard", icon="🏠")
+    st.sidebar.page_link("pages/1_Importar_Documento.py", label="Importar Documento", icon="📄")
+    st.sidebar.page_link("pages/9_Clientes.py", label="Clientes", icon="👥")
+    st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
+    st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
+    st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+    st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
+    st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
+
+menu_goia()
+
+
+
 st.title("🗂️ Processos Documentais")
 st.caption("Controle de documentos, pendências, evidências e encerramento financeiro.")
 
