@@ -478,14 +478,7 @@ def analisar_documento(texto):
         t = (texto or "").upper()
         valor = maior_valor(texto)
 
-        if "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO" in t or "ADMINISTRACAO REGIONAL DE SOBRADINHO" in t:
-            parte_nome = "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO"
-        elif "COMANDO DA MARINHA" in t:
-            parte_nome = "COMANDO DA MARINHA"
-        elif "ESTADO-MAIOR DA ARMADA" in t:
-            parte_nome = "ESTADO-MAIOR DA ARMADA"
-        else:
-            parte_nome = "Órgão Público"
+        parte_nome = "Órgão Público"
 
         parte_doc = ""
 
