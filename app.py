@@ -1,1 +1,445 @@
-import sqlite3`nimport hashlib`nimport re`nfrom pathlib import Path`nfrom io import BytesIO`nimport pandas as pd`nimport streamlit as st`nfrom utils.ui import aplicar_estilo_premium`nfrom utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido, formatar_telefone`n`nDB_PATH = Path("bd/gofinance.db")`n`nst.set_page_config(`n    page_title="GOIA Finance Platform",`n    page_icon="💰",`n    layout="wide"`n)`n`naplicar_estilo_premium()`n`n`nst.markdown("""`n<style>`n[data-testid="stSidebarNav"] {`n    display: none !important;`n}`n</style>`n""", unsafe_allow_html=True)`n`n`ndef conectar():`n    return sqlite3.connect(DB_PATH)`n`ndef limpar_doc(v):`n    return "".join(filter(str.isdigit, v or ""))`n`ndef hash_senha(s):`n    return hashlib.sha256(s.encode("utf-8")).hexdigest()`n`ndef moeda(v):`n    try:`n        return f"R$ {float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")`n    except:`n        return "R$ 0,00"`n`ndef preparar_banco():`n    conn = conectar()`n    cur = conn.cursor()`n`n    cur.execute("""`n    CREATE TABLE IF NOT EXISTS empresas (`n        id INTEGER PRIMARY KEY AUTOINCREMENT,`n        nome TEXT NOT NULL`n    )`n    """)`n`n    cur.execute("PRAGMA table_info(empresas)")`n    cols = [c[1] for c in cur.fetchall()]`n`n    def add_col(nome, tipo):`n        if nome not in cols:`n            cur.execute(f"ALTER TABLE empresas ADD COLUMN {nome} {tipo}")`n`n    add_col("cnpj_cpf", "TEXT")`n    add_col("email", "TEXT")`n    add_col("telefone", "TEXT")`n    add_col("senha_hash", "TEXT")`n    add_col("plano", "TEXT DEFAULT 'Teste'")`n    add_col("status_assinatura", "TEXT DEFAULT 'Ativa'")`n    add_col("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")`n`n    # Normaliza CNPJs já existentes`n    cur.execute("SELECT id, cnpj_cpf FROM empresas")`n    for empresa_id, cnpj in cur.fetchall():`n        if cnpj:`n            cnpj_limpo = ''.join(filter(str.isdigit, cnpj))`n            if cnpj_limpo:`n                cur.execute(`n                    "UPDATE empresas SET cnpj_cpf = ? WHERE id = ?",`n                    (cnpj_limpo, empresa_id)`n                )`n`n    # Impede duas empresas com o mesmo CNPJ preenchido`n    cur.execute("""`n    CREATE UNIQUE INDEX IF NOT EXISTS idx_empresas_cnpj_cpf_unico`n    ON empresas(cnpj_cpf)`n    WHERE cnpj_cpf IS NOT NULL AND cnpj_cpf <> ''`n    """)`n`n    conn.commit()`n    conn.close()`n`n`ndef empresa_existe_por_cnpj(cnpj):`n    conn = conectar()`n    cur = conn.cursor()`n`n    cur.execute("""`n    SELECT id, nome, senha_hash`n    FROM empresas`n    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?`n    LIMIT 1`n    """, (limpar_cnpj(cnpj),))`n`n    row = cur.fetchone()`n    conn.close()`n`n    if row:`n        return {"id": row[0], "nome": row[1], "senha_hash": row[2]}`n`n    return None`n`ndef buscar_empresa(cnpj, senha):`n    conn = conectar()`n    conn.row_factory = sqlite3.Row`n    cur = conn.cursor()`n`n    cur.execute("""`n    SELECT id, nome, cnpj_cpf`n    FROM empresas`n    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?`n      AND senha_hash = ?`n      AND COALESCE(status_assinatura, 'Ativa') = 'Ativa'`n    LIMIT 1`n    """, (limpar_cnpj(cnpj), hash_senha(senha)))`n`n    row = cur.fetchone()`n    conn.close()`n    return dict(row) if row else None`n`ndef criar_empresa(nome, cnpj, email, telefone, senha):`n    conn = conectar()`n    cur = conn.cursor()`n`n    cnpj_limpo = limpar_cnpj(cnpj)`n`n    cur.execute("""`n    SELECT id, senha_hash`n    FROM empresas`n    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?`n    """, (cnpj_limpo,))`n`n    existente = cur.fetchone()`n`n    if existente:`n        empresa_id, senha_atual = existente`n`n        if senha_atual:`n            conn.close()`n            return False, "CNPJ já possui conta cadastrada.", None`n`n        cur.execute("""`n        UPDATE empresas`n        SET nome = ?, cnpj_cpf = ?, email = ?, telefone = ?, senha_hash = ?,`n            status_assinatura = COALESCE(status_assinatura, 'Ativa')`n        WHERE id = ?`n        """, (nome, cnpj_limpo, email, limpar_telefone(telefone), hash_senha(senha), empresa_id))`n`n        conn.commit()`n        conn.close()`n        return True, "Conta criada. Entrando na GOIA.", empresa_id`n`n    cur.execute("""`n    INSERT INTO empresas (`n        nome, cnpj_cpf, email, telefone, senha_hash, plano, status_assinatura`n    )`n    VALUES (?, ?, ?, ?, ?, ?, ?)`n    """, (`n        nome, cnpj_limpo, email, limpar_telefone(telefone), hash_senha(senha), "Teste", "Ativa"`n    ))`n`n    empresa_id = cur.lastrowid`n`n    conn.commit()`n    conn.close()`n    return True, "Conta criada. Entrando na GOIA.", empresa_id`n`n`ndef formatar_cnpj(valor):`n    numeros = re.sub(r"\D", "", valor or "")`n    if len(numeros) == 14:`n        return f"{numeros[:2]}.{numeros[2:5]}.{numeros[5:8]}/{numeros[8:12]}-{numeros[12:]}"`n    return valor or ""`n`ndef extrair_dados_cartao_cnpj_pdf(arquivo):`n    dados = {"nome": "", "cnpj": "", "email": "", "telefone": ""}`n`n    try:`n        from pypdf import PdfReader`n        arquivo.seek(0)`n        reader = PdfReader(BytesIO(arquivo.read()))`n        texto = ""`n        for page in reader.pages:`n            texto += page.extract_text() or ""`n            texto += "\n"`n    except Exception:`n        return dados`n`n    texto_sem_espacos = re.sub(r"\s+", "", texto)`n    m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_sem_espacos)`n    if m:`n        dados["cnpj"] = formatar_cnpj(m.group())`n`n    linhas = [x.strip() for x in texto.splitlines() if x.strip()]`n    for i, linha in enumerate(linhas):`n        if "NOME EMPRESARIAL" in linha.upper() and i + 1 < len(linhas):`n            dados["nome"] = linhas[i + 1].strip()`n            break`n`n    email = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", texto)`n    if email:`n        dados["email"] = email.group()`n`n    telefone = re.search(r"\(?\d{2}\)?\s?\d{4,5}-?\d{4}", texto)`n    if telefone:`n        dados["telefone"] = telefone.group()`n`n    return dados`n`n`ndef tela_login():`n    st.markdown("""`n    <style>`n    [data-testid="stSidebar"] {display:none;}`n    .block-container {max-width:1100px; padding-top:55px;}`n    .hero {`n        background:linear-gradient(135deg,#050816,#172554);`n        color:white; padding:46px; border-radius:28px;`n        box-shadow:0 22px 60px rgba(15,23,42,.22);`n        margin-bottom:26px;`n    }`n    .kicker {color:#2dd4bf; font-weight:800; letter-spacing:.18em; font-size:13px;}`n    .title {font-size:42px; font-weight:900; line-height:1.08; margin-top:16px;}`n    .text {color:#cbd5e1; font-size:17px; margin-top:18px;}`n    .stTextInput input {`n        background:#fff !important;`n        border:2px solid #334155 !important;`n        color:#0f172a !important;`n        font-weight:700 !important;`n    }`n    .stButton button {`n        background:#111827 !important;`n        color:white !important;`n        border-radius:10px !important;`n        font-weight:800 !important;`n    }`n    </style>`n`n    <div class="hero">`n      <div class="kicker">GOIA FINANCE PLATFORM</div>`n      <div class="title">Inteligência financeira para empresas document-driven.</div>`n      <div class="text">Entre com o CNPJ da empresa ou crie sua conta para iniciar.</div>`n    </div>`n    """, unsafe_allow_html=True)`n`n    aba_login, aba_cadastro = st.tabs(["Já tenho conta", "Criar conta"])`n`n    with aba_login:`n        st.subheader("Acessar sistema")`n        with st.form("login"):`n            cnpj = st.text_input("CNPJ")`n            senha = st.text_input("Senha", type="password")`n            acessar = st.form_submit_button("Acessar sistema")`n`n        if acessar:`n            empresa = buscar_empresa(cnpj, senha)`n            if not empresa:`n                st.error("CNPJ ou senha inválidos.")`n                st.stop()`n`n            st.session_state["logado"] = True`n            st.session_state["empresa_id"] = empresa["id"]`n            st.session_state["empresa_nome"] = empresa["nome"]`n            st.rerun()`n`n    with aba_cadastro:`n        st.subheader("Cadastrar empresa")`n`n        st.caption("Primeiro anexe o Cartão CNPJ oficial. A GOIA preencherá Razão Social e CNPJ a partir do documento.")`n`n        documento_empresa = st.file_uploader(`n            "Anexar Cartão CNPJ / documento oficial da empresa",`n            type=["pdf"],`n            key="documento_cadastro_empresa"`n        )`n`n        dados_doc = {"nome": "", "cnpj": "", "email": "", "telefone": ""}`n`n        if not documento_empresa:`n            st.warning("Anexe o Cartão CNPJ para liberar o cadastro.")`n        else:`n            dados_doc = extrair_dados_cartao_cnpj_pdf(documento_empresa)`n`n            if dados_doc.get("nome") and dados_doc.get("cnpj"):`n                st.success(f"Documento lido: {documento_empresa.name}")`n            else:`n                st.error("Documento anexado, mas não foi possível identificar Razão Social e CNPJ. Envie o Cartão CNPJ oficial em PDF.")`n`n        documento_valido = bool(dados_doc.get("nome")) and bool(dados_doc.get("cnpj"))`n`n        nome_oficial = dados_doc.get("nome", "")`n        cnpj_oficial = dados_doc.get("cnpj", "")`n`n        empresa_existente = None`n        if documento_valido:`n            empresa_existente = empresa_existe_por_cnpj(cnpj_oficial)`n`n            if empresa_existente and empresa_existente.get("senha_hash"):`n                st.warning(`n                    "Este CNPJ já possui conta cadastrada na GOIA. "`n                    "Use a aba 'Já tenho conta' para acessar."`n                )`n            elif empresa_existente and not empresa_existente.get("senha_hash"):`n                st.info(`n                    "Este CNPJ já existe na base, mas ainda não possui senha. "`n                    "Complete o cadastro para ativar o acesso."`n                )`n`n        with st.container(border=True):`n            st.text_input(`n                "Razão Social identificada no Cartão CNPJ",`n                value=nome_oficial,`n                disabled=True`n            )`n`n            st.text_input(`n                "CNPJ identificado no Cartão CNPJ",`n                value=cnpj_oficial,`n                disabled=True`n            )`n`n            email = st.text_input("E-mail de acesso", value=(dados_doc.get("email") or ""))`n            telefone = st.text_input(`n                "Telefone / WhatsApp",`n                value=formatar_telefone(dados_doc.get("telefone") or ""),`n                help="Digite DDD + número. Exemplo: (61) 99987-8710"`n            )`n            senha = st.text_input("Senha", type="password")`n            confirmar = st.text_input("Confirmar senha", type="password")`n`n            bloquear_cadastro = False`n`n            if not documento_valido:`n                bloquear_cadastro = True`n`n            if empresa_existente is not None and bool(empresa_existente.get("senha_hash")):`n                bloquear_cadastro = True`n`n            criar = st.button(`n                "Criar conta",`n                disabled=bool(bloquear_cadastro)`n            )`n`n        if criar:`n            if not documento_valido:`n                st.error("Cadastro bloqueado: anexe o Cartão CNPJ oficial.")`n            elif empresa_existente is not None and empresa_existente.get("senha_hash"):`n                st.error("Cadastro bloqueado: este CNPJ já possui conta cadastrada.")`n            elif senha != confirmar:`n                st.error("As senhas não conferem.")`n            elif not email.strip() or not telefone.strip() or not senha:`n                st.error("Informe e-mail, telefone e senha.")`n            elif not telefone_valido(telefone):`n                st.error("Telefone inválido. Informe DDD + número, exemplo: (61) 99987-8710.")`n            else:`n                ok, msg, empresa_id = criar_empresa(nome_oficial, cnpj_oficial, email, telefone, senha)`n`n                if ok:`n                    st.session_state["logado"] = True`n                    st.session_state["empresa_id"] = empresa_id`n                    st.session_state["empresa_nome"] = nome_oficial`n                    st.success(msg)`n                    st.rerun()`n                else:`n                    st.warning(msg)`n`n    st.stop()`n`npreparar_banco()`n`nif not st.session_state.get("logado") or not st.session_state.get("empresa_id"):`n    tela_login()`n    st.stop()`n`nEMPRESA_ID = st.session_state.get("empresa_id")`n`ndef carregar_movimentacoes():`n    conn = conectar()`n`n    try:`n        receber = pd.read_sql_query("""`n            SELECT data_vencimento AS data, 'Receber' AS tipo, descricao, categoria, valor, status`n            FROM contas_receber`n            WHERE empresa_id = ?`n        """, conn, params=(EMPRESA_ID,))`n    except:`n        receber = pd.DataFrame(columns=["data", "tipo", "descricao", "categoria", "valor", "status"])`n`n    try:`n        pagar = pd.read_sql_query("""`n            SELECT data_vencimento AS data, 'Pagar' AS tipo, descricao, categoria, -valor AS valor, status`n            FROM contas_pagar`n            WHERE empresa_id = ?`n        """, conn, params=(EMPRESA_ID,))`n    except:`n        pagar = pd.DataFrame(columns=["data", "tipo", "descricao", "categoria", "valor", "status"])`n`n    conn.close()`n    return pd.concat([receber, pagar], ignore_index=True)`n`ndf = carregar_movimentacoes()`n`nrecebimentos = df[df["tipo"] == "Receber"]["valor"].sum() if not df.empty else 0`npagamentos = abs(df[df["tipo"] == "Pagar"]["valor"].sum()) if not df.empty else 0`nsaldo = recebimentos - pagamentos`n`nst.sidebar.markdown("## GOIA")`nst.sidebar.caption(st.session_state.get("empresa_nome"))`n`nif st.sidebar.button("Sair"):`n    st.session_state.clear()`n    st.rerun()`n`nst.sidebar.page_link("app.py", label="Dashboard", icon="🏠")`nst.sidebar.page_link("pages/1_Importar_Documento.py", label="Importar Documento", icon="📄")`nst.sidebar.page_link("pages/9_Clientes.py", label="Clientes", icon="👥")`nst.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")`nst.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")`nst.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")`n`nst.title("💰 GOIA Finance Platform")`nst.caption(f"Empresa ativa: {st.session_state.get('empresa_nome')}")`n`nc1, c2, c3 = st.columns(3)`nc1.metric("Recebimentos", moeda(recebimentos))`nc2.metric("Pagamentos", moeda(pagamentos))`nc3.metric("Saldo operacional", moeda(saldo))`n`nst.divider()`nst.subheader("Movimentações financeiras")`n`nif df.empty:`n    st.info("Nenhuma movimentação encontrada para esta empresa.")`nelse:`n    st.dataframe(df, width="stretch", hide_index=True)
+import sqlite3
+import hashlib
+import re
+from pathlib import Path
+from io import BytesIO
+import pandas as pd
+import streamlit as st
+from utils.ui import aplicar_estilo_premium
+from utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido, formatar_telefone
+
+DB_PATH = Path("bd/gofinance.db")
+
+st.set_page_config(
+    page_title="GOIA Finance Platform",
+    page_icon="💰",
+    layout="wide"
+)
+
+aplicar_estilo_premium()
+
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+def conectar():
+    return sqlite3.connect(DB_PATH)
+
+def limpar_doc(v):
+    return "".join(filter(str.isdigit, v or ""))
+
+def hash_senha(s):
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+def moeda(v):
+    try:
+        return f"R$ {float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return "R$ 0,00"
+
+def preparar_banco():
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS empresas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL
+    )
+    """)
+
+    cur.execute("PRAGMA table_info(empresas)")
+    cols = [c[1] for c in cur.fetchall()]
+
+    def add_col(nome, tipo):
+        if nome not in cols:
+            cur.execute(f"ALTER TABLE empresas ADD COLUMN {nome} {tipo}")
+
+    add_col("cnpj_cpf", "TEXT")
+    add_col("email", "TEXT")
+    add_col("telefone", "TEXT")
+    add_col("senha_hash", "TEXT")
+    add_col("plano", "TEXT DEFAULT 'Teste'")
+    add_col("status_assinatura", "TEXT DEFAULT 'Ativa'")
+    add_col("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
+
+    # Normaliza CNPJs já existentes
+    cur.execute("SELECT id, cnpj_cpf FROM empresas")
+    for empresa_id, cnpj in cur.fetchall():
+        if cnpj:
+            cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
+            if cnpj_limpo:
+                cur.execute(
+                    "UPDATE empresas SET cnpj_cpf = ? WHERE id = ?",
+                    (cnpj_limpo, empresa_id)
+                )
+
+    # Impede duas empresas com o mesmo CNPJ preenchido
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_empresas_cnpj_cpf_unico
+    ON empresas(cnpj_cpf)
+    WHERE cnpj_cpf IS NOT NULL AND cnpj_cpf <> ''
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+def empresa_existe_por_cnpj(cnpj):
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT id, nome, senha_hash
+    FROM empresas
+    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+    LIMIT 1
+    """, (limpar_cnpj(cnpj),))
+
+    row = cur.fetchone()
+    conn.close()
+
+    if row:
+        return {"id": row[0], "nome": row[1], "senha_hash": row[2]}
+
+    return None
+
+def buscar_empresa(cnpj, senha):
+    conn = conectar()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT id, nome, cnpj_cpf
+    FROM empresas
+    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+      AND senha_hash = ?
+      AND COALESCE(status_assinatura, 'Ativa') = 'Ativa'
+    LIMIT 1
+    """, (limpar_cnpj(cnpj), hash_senha(senha)))
+
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def criar_empresa(nome, cnpj, email, telefone, senha):
+    conn = conectar()
+    cur = conn.cursor()
+
+    cnpj_limpo = limpar_cnpj(cnpj)
+
+    cur.execute("""
+    SELECT id, senha_hash
+    FROM empresas
+    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+    """, (cnpj_limpo,))
+
+    existente = cur.fetchone()
+
+    if existente:
+        empresa_id, senha_atual = existente
+
+        if senha_atual:
+            conn.close()
+            return False, "CNPJ já possui conta cadastrada.", None
+
+        cur.execute("""
+        UPDATE empresas
+        SET nome = ?, cnpj_cpf = ?, email = ?, telefone = ?, senha_hash = ?,
+            status_assinatura = COALESCE(status_assinatura, 'Ativa')
+        WHERE id = ?
+        """, (nome, cnpj_limpo, email, limpar_telefone(telefone), hash_senha(senha), empresa_id))
+
+        conn.commit()
+        conn.close()
+        return True, "Conta criada. Entrando na GOIA.", empresa_id
+
+    cur.execute("""
+    INSERT INTO empresas (
+        nome, cnpj_cpf, email, telefone, senha_hash, plano, status_assinatura
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        nome, cnpj_limpo, email, limpar_telefone(telefone), hash_senha(senha), "Teste", "Ativa"
+    ))
+
+    empresa_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+    return True, "Conta criada. Entrando na GOIA.", empresa_id
+
+
+def formatar_cnpj(valor):
+    numeros = re.sub(r"\D", "", valor or "")
+    if len(numeros) == 14:
+        return f"{numeros[:2]}.{numeros[2:5]}.{numeros[5:8]}/{numeros[8:12]}-{numeros[12:]}"
+    return valor or ""
+
+def extrair_dados_cartao_cnpj_pdf(arquivo):
+    dados = {"nome": "", "cnpj": "", "email": "", "telefone": ""}
+
+    try:
+        from pypdf import PdfReader
+        arquivo.seek(0)
+        reader = PdfReader(BytesIO(arquivo.read()))
+        texto = ""
+        for page in reader.pages:
+            texto += page.extract_text() or ""
+            texto += "\n"
+    except Exception:
+        return dados
+
+    texto_sem_espacos = re.sub(r"\s+", "", texto)
+    m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_sem_espacos)
+    if m:
+        dados["cnpj"] = formatar_cnpj(m.group())
+
+    linhas = [x.strip() for x in texto.splitlines() if x.strip()]
+    for i, linha in enumerate(linhas):
+        if "NOME EMPRESARIAL" in linha.upper() and i + 1 < len(linhas):
+            dados["nome"] = linhas[i + 1].strip()
+            break
+
+    email = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", texto)
+    if email:
+        dados["email"] = email.group()
+
+    telefone = re.search(r"\(?\d{2}\)?\s?\d{4,5}-?\d{4}", texto)
+    if telefone:
+        dados["telefone"] = telefone.group()
+
+    return dados
+
+
+def tela_login():
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"] {display:none;}
+    .block-container {max-width:1100px; padding-top:55px;}
+    .hero {
+        background:linear-gradient(135deg,#050816,#172554);
+        color:white; padding:46px; border-radius:28px;
+        box-shadow:0 22px 60px rgba(15,23,42,.22);
+        margin-bottom:26px;
+    }
+    .kicker {color:#2dd4bf; font-weight:800; letter-spacing:.18em; font-size:13px;}
+    .title {font-size:42px; font-weight:900; line-height:1.08; margin-top:16px;}
+    .text {color:#cbd5e1; font-size:17px; margin-top:18px;}
+    .stTextInput input {
+        background:#fff !important;
+        border:2px solid #334155 !important;
+        color:#0f172a !important;
+        font-weight:700 !important;
+    }
+    .stButton button {
+        background:#111827 !important;
+        color:white !important;
+        border-radius:10px !important;
+        font-weight:800 !important;
+    }
+    </style>
+
+    <div class="hero">
+      <div class="kicker">GOIA FINANCE PLATFORM</div>
+      <div class="title">Inteligência financeira para empresas document-driven.</div>
+      <div class="text">Entre com o CNPJ da empresa ou crie sua conta para iniciar.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    aba_login, aba_cadastro = st.tabs(["Já tenho conta", "Criar conta"])
+
+    with aba_login:
+        st.subheader("Acessar sistema")
+        with st.form("login"):
+            cnpj = st.text_input("CNPJ")
+            senha = st.text_input("Senha", type="password")
+            acessar = st.form_submit_button("Acessar sistema")
+
+        if acessar:
+            empresa = buscar_empresa(cnpj, senha)
+            if not empresa:
+                st.error("CNPJ ou senha inválidos.")
+                st.stop()
+
+            st.session_state["logado"] = True
+            st.session_state["empresa_id"] = empresa["id"]
+            st.session_state["empresa_nome"] = empresa["nome"]
+            st.rerun()
+
+    with aba_cadastro:
+        st.subheader("Cadastrar empresa")
+
+        st.caption("Primeiro anexe o Cartão CNPJ oficial. A GOIA preencherá Razão Social e CNPJ a partir do documento.")
+
+        documento_empresa = st.file_uploader(
+            "Anexar Cartão CNPJ / documento oficial da empresa",
+            type=["pdf"],
+            key="documento_cadastro_empresa"
+        )
+
+        dados_doc = {"nome": "", "cnpj": "", "email": "", "telefone": ""}
+
+        if not documento_empresa:
+            st.warning("Anexe o Cartão CNPJ para liberar o cadastro.")
+        else:
+            dados_doc = extrair_dados_cartao_cnpj_pdf(documento_empresa)
+
+            if dados_doc.get("nome") and dados_doc.get("cnpj"):
+                st.success(f"Documento lido: {documento_empresa.name}")
+            else:
+                st.error("Documento anexado, mas não foi possível identificar Razão Social e CNPJ. Envie o Cartão CNPJ oficial em PDF.")
+
+        documento_valido = bool(dados_doc.get("nome")) and bool(dados_doc.get("cnpj"))
+
+        nome_oficial = dados_doc.get("nome", "")
+        cnpj_oficial = dados_doc.get("cnpj", "")
+
+        empresa_existente = None
+        if documento_valido:
+            empresa_existente = empresa_existe_por_cnpj(cnpj_oficial)
+
+            if empresa_existente and empresa_existente.get("senha_hash"):
+                st.warning(
+                    "Este CNPJ já possui conta cadastrada na GOIA. "
+                    "Use a aba 'Já tenho conta' para acessar."
+                )
+            elif empresa_existente and not empresa_existente.get("senha_hash"):
+                st.info(
+                    "Este CNPJ já existe na base, mas ainda não possui senha. "
+                    "Complete o cadastro para ativar o acesso."
+                )
+
+        with st.container(border=True):
+            st.text_input(
+                "Razão Social identificada no Cartão CNPJ",
+                value=nome_oficial,
+                disabled=True
+            )
+
+            st.text_input(
+                "CNPJ identificado no Cartão CNPJ",
+                value=cnpj_oficial,
+                disabled=True
+            )
+
+            email = st.text_input("E-mail de acesso", value=(dados_doc.get("email") or ""))
+            telefone = st.text_input(
+                "Telefone / WhatsApp",
+                value=formatar_telefone(dados_doc.get("telefone") or ""),
+                help="Digite DDD + número. Exemplo: (61) 99987-8710"
+            )
+            senha = st.text_input("Senha", type="password")
+            confirmar = st.text_input("Confirmar senha", type="password")
+
+            bloquear_cadastro = False
+
+            if not documento_valido:
+                bloquear_cadastro = True
+
+            if empresa_existente is not None and bool(empresa_existente.get("senha_hash")):
+                bloquear_cadastro = True
+
+            criar = st.button(
+                "Criar conta",
+                disabled=bool(bloquear_cadastro)
+            )
+
+        if criar:
+            if not documento_valido:
+                st.error("Cadastro bloqueado: anexe o Cartão CNPJ oficial.")
+            elif empresa_existente is not None and empresa_existente.get("senha_hash"):
+                st.error("Cadastro bloqueado: este CNPJ já possui conta cadastrada.")
+            elif senha != confirmar:
+                st.error("As senhas não conferem.")
+            elif not email.strip() or not telefone.strip() or not senha:
+                st.error("Informe e-mail, telefone e senha.")
+            elif not telefone_valido(telefone):
+                st.error("Telefone inválido. Informe DDD + número, exemplo: (61) 99987-8710.")
+            else:
+                ok, msg, empresa_id = criar_empresa(nome_oficial, cnpj_oficial, email, telefone, senha)
+
+                if ok:
+                    st.session_state["logado"] = True
+                    st.session_state["empresa_id"] = empresa_id
+                    st.session_state["empresa_nome"] = nome_oficial
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.warning(msg)
+
+    st.stop()
+
+preparar_banco()
+
+if not st.session_state.get("logado") or not st.session_state.get("empresa_id"):
+    tela_login()
+    st.stop()
+
+EMPRESA_ID = st.session_state.get("empresa_id")
+
+def carregar_movimentacoes():
+    conn = conectar()
+
+    try:
+        receber = pd.read_sql_query("""
+            SELECT data_vencimento AS data, 'Receber' AS tipo, descricao, categoria, valor, status
+            FROM contas_receber
+            WHERE empresa_id = ?
+        """, conn, params=(EMPRESA_ID,))
+    except:
+        receber = pd.DataFrame(columns=["data", "tipo", "descricao", "categoria", "valor", "status"])
+
+    try:
+        pagar = pd.read_sql_query("""
+            SELECT data_vencimento AS data, 'Pagar' AS tipo, descricao, categoria, -valor AS valor, status
+            FROM contas_pagar
+            WHERE empresa_id = ?
+        """, conn, params=(EMPRESA_ID,))
+    except:
+        pagar = pd.DataFrame(columns=["data", "tipo", "descricao", "categoria", "valor", "status"])
+
+    conn.close()
+    return pd.concat([receber, pagar], ignore_index=True)
+
+df = carregar_movimentacoes()
+
+recebimentos = df[df["tipo"] == "Receber"]["valor"].sum() if not df.empty else 0
+pagamentos = abs(df[df["tipo"] == "Pagar"]["valor"].sum()) if not df.empty else 0
+saldo = recebimentos - pagamentos
+
+st.sidebar.markdown("## GOIA")
+st.sidebar.caption(st.session_state.get("empresa_nome"))
+
+if st.sidebar.button("Sair"):
+    st.session_state.clear()
+    st.rerun()
+
+st.sidebar.page_link("app.py", label="Dashboard", icon="🏠")
+st.sidebar.page_link("pages/1_Importar_Documento.py", label="Importar Documento", icon="📄")
+st.sidebar.page_link("pages/9_Clientes.py", label="Clientes", icon="👥")
+st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
+st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
+st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+
+st.title("💰 GOIA Finance Platform")
+st.caption(f"Empresa ativa: {st.session_state.get('empresa_nome')}")
+
+c1, c2, c3 = st.columns(3)
+c1.metric("Recebimentos", moeda(recebimentos))
+c2.metric("Pagamentos", moeda(pagamentos))
+c3.metric("Saldo operacional", moeda(saldo))
+
+st.divider()
+st.subheader("Movimentações financeiras")
+
+if df.empty:
+    st.info("Nenhuma movimentação encontrada para esta empresa.")
+else:
+    st.dataframe(df, width="stretch", hide_index=True)

@@ -1,1 +1,390 @@
-import streamlit as st`nfrom utils.ui import aplicar_estilo_premium`nimport pandas as pd`nimport sqlite3`nfrom datetime import date`n`nDB_PATH = "bd/gofinance.db"`nEMPRESA_ID_ATIVA = 1`n`nst.set_page_config(`n    page_title="Vendas",`n    page_icon="🧾",`n    layout="wide"`n)`n`naplicar_estilo_premium()`n`n`nst.markdown("""`n<style>`n[data-testid="stSidebarNav"] {`n    display: none;`n}`n</style>`n""", unsafe_allow_html=True)`n`n`ndef menu_goia():`n    st.sidebar.markdown("## GOIA")`n    st.sidebar.page_link("app.py", label="Dashboard", icon="🏠")`n    st.sidebar.page_link("pages/1_Importar_Documento.py", label="Importar Documento", icon="📄")`n    st.sidebar.page_link("pages/9_Clientes.py", label="Clientes", icon="👥")`n    st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")`n    st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")`n    st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")`n    st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")`n    st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")`n`nmenu_goia()`n`n`n`nst.title("🧾 Vendas")`nst.caption("Registrar venda, baixar estoque e gerar conta a receber.")`n`ndef moeda(valor):`n    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")`n`ndef carregar_produtos():`n    conn = sqlite3.connect(DB_PATH)`n`n    query = """`n        SELECT`n            p.id,`n            p.descricao,`n            p.categoria,`n            p.custo_medio,`n            p.preco_venda,`n            COALESCE(SUM(`n                CASE`n                    WHEN em.tipo = 'Entrada' THEN em.quantidade`n                    WHEN em.tipo = 'Saída' THEN -em.quantidade`n                    WHEN em.tipo = 'Saida' THEN -em.quantidade`n                    ELSE 0`n                END`n            ), 0) AS saldo_estoque`n        FROM produtos p`n        LEFT JOIN estoque_movimentacoes em`n            ON em.produto_id = p.id`n           AND em.empresa_id = p.empresa_id`n        WHERE p.empresa_id = ?`n        GROUP BY`n            p.id,`n            p.descricao,`n            p.categoria,`n            p.custo_medio,`n            p.preco_venda`n        ORDER BY p.descricao`n    """`n`n    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA,))`n    conn.close()`n`n    if not df.empty:`n        df["custo_medio"] = pd.to_numeric(df["custo_medio"], errors="coerce").fillna(0)`n        df["preco_venda"] = pd.to_numeric(df["preco_venda"], errors="coerce").fillna(0)`n        df["saldo_estoque"] = pd.to_numeric(df["saldo_estoque"], errors="coerce").fillna(0)`n`n    return df`n`ndef obter_ou_criar_cliente(cursor, nome, cnpj_cpf=""):`n    nome = (nome or "").strip()`n    cnpj_cpf = (cnpj_cpf or "").strip()`n`n    if cnpj_cpf:`n        cursor.execute("""`n            SELECT id`n            FROM clientes`n            WHERE cnpj_cpf = ?`n              AND empresa_id = ?`n        """, (cnpj_cpf, EMPRESA_ID_ATIVA))`n    else:`n        cursor.execute("""`n            SELECT id`n            FROM clientes`n            WHERE nome = ?`n              AND empresa_id = ?`n        """, (nome, EMPRESA_ID_ATIVA))`n`n    resultado = cursor.fetchone()`n`n    if resultado:`n        return resultado[0]`n`n    cursor.execute("""`n        INSERT INTO clientes (`n            cnpj_cpf,`n            nome,`n            empresa_id`n        )`n        VALUES (?, ?, ?)`n    """, (`n        cnpj_cpf,`n        nome,`n        EMPRESA_ID_ATIVA`n    ))`n`n    return cursor.lastrowid`n`ndef registrar_venda(cliente_nome, cliente_cnpj, produto, quantidade, valor_unitario, data_venda, vencimento):`n    conn = sqlite3.connect(DB_PATH)`n    cursor = conn.cursor()`n`n    try:`n        cliente_id = obter_ou_criar_cliente(cursor, cliente_nome, cliente_cnpj)`n`n        descricao = produto["descricao"]`n        produto_id = int(produto["id"])`n        saldo_atual = float(produto["saldo_estoque"])`n        quantidade = float(quantidade)`n        valor_unitario = float(valor_unitario)`n        valor_total = quantidade * valor_unitario`n`n        if quantidade <= 0:`n            raise ValueError("Quantidade deve ser maior que zero.")`n`n        if quantidade > saldo_atual:`n            raise ValueError(f"Estoque insuficiente. Saldo atual: {saldo_atual}")`n`n        cursor.execute("""`n            INSERT INTO vendas (`n                cliente_id,`n                documento_id,`n                descricao,`n                valor_total,`n                data_venda,`n                status,`n                empresa_id`n            )`n            VALUES (?, ?, ?, ?, ?, ?, ?)`n        """, (`n            cliente_id,`n            None,`n            descricao,`n            valor_total,`n            data_venda,`n            "Aberta",`n            EMPRESA_ID_ATIVA`n        ))`n`n        venda_id = cursor.lastrowid`n`n        cursor.execute("""`n            INSERT INTO vendas_itens (`n                venda_id,`n                produto_id,`n                descricao,`n                quantidade,`n                valor_unitario,`n                valor_total,`n                empresa_id`n            )`n            VALUES (?, ?, ?, ?, ?, ?, ?)`n        """, (`n            venda_id,`n            produto_id,`n            descricao,`n            quantidade,`n            valor_unitario,`n            valor_total,`n            EMPRESA_ID_ATIVA`n        ))`n`n        cursor.execute("""`n            INSERT INTO estoque_movimentacoes (`n                produto_id,`n                tipo,`n                quantidade,`n                valor_unitario,`n                valor_total,`n                origem,`n                documento_id,`n                data_movimento,`n                empresa_id`n            )`n            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`n        """, (`n            produto_id,`n            "Saída",`n            quantidade,`n            valor_unitario,`n            valor_total,`n            f"Venda #{venda_id}",`n            None,`n            data_venda,`n            EMPRESA_ID_ATIVA`n        ))`n`n        cursor.execute("""`n            INSERT INTO contas_receber (`n                cliente_id,`n                documento_id,`n                descricao,`n                categoria,`n                valor,`n                data_emissao,`n                data_vencimento,`n                status,`n                empresa_id`n            )`n            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`n        """, (`n            cliente_id,`n            None,`n            descricao,`n            "Vendas",`n            valor_total,`n            data_venda,`n            vencimento,`n            "Pendente",`n            EMPRESA_ID_ATIVA`n        ))`n`n        conn.commit()`n`n        return {`n            "sucesso": True,`n            "venda_id": venda_id,`n            "valor_total": valor_total`n        }`n`n    except Exception as e:`n        conn.rollback()`n        return {`n            "sucesso": False,`n            "erro": str(e)`n        }`n`n    finally:`n        conn.close()`n`ndf_produtos = carregar_produtos()`n`nif df_produtos.empty:`n    st.warning("Nenhum produto cadastrado para venda.")`n    st.stop()`n`nprodutos_com_estoque = df_produtos[df_produtos["saldo_estoque"] > 0].copy()`n`nif produtos_com_estoque.empty:`n    st.warning("Não há produtos com estoque disponível para venda.")`n    st.stop()`n`nst.subheader("Nova venda")`n`nwith st.form("nova_venda"):`n    col1, col2 = st.columns(2)`n`n    with col1:`n        cliente_nome = st.text_input("Cliente", value="Cliente não identificado")`n`n    with col2:`n        cliente_cnpj = st.text_input("CPF / CNPJ do cliente", value="")`n`n    produto_opcao = st.selectbox(`n        "Produto",`n        produtos_com_estoque["id"].tolist(),`n        format_func=lambda x: produtos_com_estoque[produtos_com_estoque["id"] == x]["descricao"].iloc[0]`n    )`n`n    produto = produtos_com_estoque[produtos_com_estoque["id"] == produto_opcao].iloc[0]`n`n    colp1, colp2, colp3 = st.columns(3)`n`n    with colp1:`n        st.info(f"Estoque atual: {produto['saldo_estoque']}")`n`n    with colp2:`n        st.info(f"Custo médio: {moeda(float(produto['custo_medio']))}")`n`n    with colp3:`n        st.info(f"Preço venda atual: {moeda(float(produto['preco_venda']))}")`n`n    colv1, colv2, colv3 = st.columns(3)`n`n    with colv1:`n        quantidade = st.number_input(`n            "Quantidade",`n            min_value=0.01,`n            max_value=float(produto["saldo_estoque"]),`n            value=1.0,`n            step=1.0`n        )`n`n    with colv2:`n        preco_padrao = float(produto["preco_venda"]) if float(produto["preco_venda"]) > 0 else float(produto["custo_medio"])`n        valor_unitario = st.number_input(`n            "Valor unitário",`n            min_value=0.0,`n            value=preco_padrao,`n            step=0.01`n        )`n`n    with colv3:`n        valor_total = quantidade * valor_unitario`n        st.info(f"Total: {moeda(valor_total)}")`n`n    coldata1, coldata2 = st.columns(2)`n`n    with coldata1:`n        data_venda = st.date_input("Data da venda", value=date.today())`n`n    with coldata2:`n        vencimento = st.date_input("Vencimento", value=date.today())`n`n    confirmar = st.form_submit_button("Registrar venda")`n`nif confirmar:`n    resultado = registrar_venda(`n        cliente_nome,`n        cliente_cnpj,`n        produto,`n        quantidade,`n        valor_unitario,`n        data_venda.strftime("%Y-%m-%d"),`n        vencimento.strftime("%Y-%m-%d")`n    )`n`n    if resultado["sucesso"]:`n        st.success(`n            f"Venda registrada com sucesso. Venda ID: {resultado['venda_id']}. "`n            f"Valor: {moeda(resultado['valor_total'])}. Estoque baixado e conta a receber criada."`n        )`n        st.rerun()`n    else:`n        st.error(f"Erro ao registrar venda: {resultado['erro']}")`n`nst.divider()`n`nst.subheader("Produtos disponíveis")`n`ndf_exibicao = produtos_com_estoque.copy()`ndf_exibicao["custo_medio"] = df_exibicao["custo_medio"].apply(moeda)`ndf_exibicao["preco_venda"] = df_exibicao["preco_venda"].apply(moeda)`n`ndf_exibicao = df_exibicao[[`n    "id",`n    "descricao",`n    "categoria",`n    "saldo_estoque",`n    "custo_medio",`n    "preco_venda"`n]]`n`ndf_exibicao = df_exibicao.rename(columns={`n    "id": "ID",`n    "descricao": "Produto",`n    "categoria": "Categoria",`n    "saldo_estoque": "Estoque",`n    "custo_medio": "Custo médio",`n    "preco_venda": "Preço venda"`n})`n`nst.dataframe(`n    df_exibicao,`n    width="stretch",`n    hide_index=True`n)`n`nst.caption("Versão 0.1 - Vendas")
+import streamlit as st
+from utils.ui import aplicar_estilo_premium
+import pandas as pd
+import sqlite3
+from datetime import date
+
+DB_PATH = "bd/gofinance.db"
+EMPRESA_ID_ATIVA = 1
+
+st.set_page_config(
+    page_title="Vendas",
+    page_icon="🧾",
+    layout="wide"
+)
+
+aplicar_estilo_premium()
+
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+def menu_goia():
+    st.sidebar.markdown("## GOIA")
+    st.sidebar.page_link("app.py", label="Dashboard", icon="🏠")
+    st.sidebar.page_link("pages/1_Importar_Documento.py", label="Importar Documento", icon="📄")
+    st.sidebar.page_link("pages/9_Clientes.py", label="Clientes", icon="👥")
+    st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
+    st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
+    st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+    st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
+    st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
+
+menu_goia()
+
+
+
+st.title("🧾 Vendas")
+st.caption("Registrar venda, baixar estoque e gerar conta a receber.")
+
+def moeda(valor):
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def carregar_produtos():
+    conn = sqlite3.connect(DB_PATH)
+
+    query = """
+        SELECT
+            p.id,
+            p.descricao,
+            p.categoria,
+            p.custo_medio,
+            p.preco_venda,
+            COALESCE(SUM(
+                CASE
+                    WHEN em.tipo = 'Entrada' THEN em.quantidade
+                    WHEN em.tipo = 'Saída' THEN -em.quantidade
+                    WHEN em.tipo = 'Saida' THEN -em.quantidade
+                    ELSE 0
+                END
+            ), 0) AS saldo_estoque
+        FROM produtos p
+        LEFT JOIN estoque_movimentacoes em
+            ON em.produto_id = p.id
+           AND em.empresa_id = p.empresa_id
+        WHERE p.empresa_id = ?
+        GROUP BY
+            p.id,
+            p.descricao,
+            p.categoria,
+            p.custo_medio,
+            p.preco_venda
+        ORDER BY p.descricao
+    """
+
+    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA,))
+    conn.close()
+
+    if not df.empty:
+        df["custo_medio"] = pd.to_numeric(df["custo_medio"], errors="coerce").fillna(0)
+        df["preco_venda"] = pd.to_numeric(df["preco_venda"], errors="coerce").fillna(0)
+        df["saldo_estoque"] = pd.to_numeric(df["saldo_estoque"], errors="coerce").fillna(0)
+
+    return df
+
+def obter_ou_criar_cliente(cursor, nome, cnpj_cpf=""):
+    nome = (nome or "").strip()
+    cnpj_cpf = (cnpj_cpf or "").strip()
+
+    if cnpj_cpf:
+        cursor.execute("""
+            SELECT id
+            FROM clientes
+            WHERE cnpj_cpf = ?
+              AND empresa_id = ?
+        """, (cnpj_cpf, EMPRESA_ID_ATIVA))
+    else:
+        cursor.execute("""
+            SELECT id
+            FROM clientes
+            WHERE nome = ?
+              AND empresa_id = ?
+        """, (nome, EMPRESA_ID_ATIVA))
+
+    resultado = cursor.fetchone()
+
+    if resultado:
+        return resultado[0]
+
+    cursor.execute("""
+        INSERT INTO clientes (
+            cnpj_cpf,
+            nome,
+            empresa_id
+        )
+        VALUES (?, ?, ?)
+    """, (
+        cnpj_cpf,
+        nome,
+        EMPRESA_ID_ATIVA
+    ))
+
+    return cursor.lastrowid
+
+def registrar_venda(cliente_nome, cliente_cnpj, produto, quantidade, valor_unitario, data_venda, vencimento):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        cliente_id = obter_ou_criar_cliente(cursor, cliente_nome, cliente_cnpj)
+
+        descricao = produto["descricao"]
+        produto_id = int(produto["id"])
+        saldo_atual = float(produto["saldo_estoque"])
+        quantidade = float(quantidade)
+        valor_unitario = float(valor_unitario)
+        valor_total = quantidade * valor_unitario
+
+        if quantidade <= 0:
+            raise ValueError("Quantidade deve ser maior que zero.")
+
+        if quantidade > saldo_atual:
+            raise ValueError(f"Estoque insuficiente. Saldo atual: {saldo_atual}")
+
+        cursor.execute("""
+            INSERT INTO vendas (
+                cliente_id,
+                documento_id,
+                descricao,
+                valor_total,
+                data_venda,
+                status,
+                empresa_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            cliente_id,
+            None,
+            descricao,
+            valor_total,
+            data_venda,
+            "Aberta",
+            EMPRESA_ID_ATIVA
+        ))
+
+        venda_id = cursor.lastrowid
+
+        cursor.execute("""
+            INSERT INTO vendas_itens (
+                venda_id,
+                produto_id,
+                descricao,
+                quantidade,
+                valor_unitario,
+                valor_total,
+                empresa_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            venda_id,
+            produto_id,
+            descricao,
+            quantidade,
+            valor_unitario,
+            valor_total,
+            EMPRESA_ID_ATIVA
+        ))
+
+        cursor.execute("""
+            INSERT INTO estoque_movimentacoes (
+                produto_id,
+                tipo,
+                quantidade,
+                valor_unitario,
+                valor_total,
+                origem,
+                documento_id,
+                data_movimento,
+                empresa_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            produto_id,
+            "Saída",
+            quantidade,
+            valor_unitario,
+            valor_total,
+            f"Venda #{venda_id}",
+            None,
+            data_venda,
+            EMPRESA_ID_ATIVA
+        ))
+
+        cursor.execute("""
+            INSERT INTO contas_receber (
+                cliente_id,
+                documento_id,
+                descricao,
+                categoria,
+                valor,
+                data_emissao,
+                data_vencimento,
+                status,
+                empresa_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            cliente_id,
+            None,
+            descricao,
+            "Vendas",
+            valor_total,
+            data_venda,
+            vencimento,
+            "Pendente",
+            EMPRESA_ID_ATIVA
+        ))
+
+        conn.commit()
+
+        return {
+            "sucesso": True,
+            "venda_id": venda_id,
+            "valor_total": valor_total
+        }
+
+    except Exception as e:
+        conn.rollback()
+        return {
+            "sucesso": False,
+            "erro": str(e)
+        }
+
+    finally:
+        conn.close()
+
+df_produtos = carregar_produtos()
+
+if df_produtos.empty:
+    st.warning("Nenhum produto cadastrado para venda.")
+    st.stop()
+
+produtos_com_estoque = df_produtos[df_produtos["saldo_estoque"] > 0].copy()
+
+if produtos_com_estoque.empty:
+    st.warning("Não há produtos com estoque disponível para venda.")
+    st.stop()
+
+st.subheader("Nova venda")
+
+with st.form("nova_venda"):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        cliente_nome = st.text_input("Cliente", value="Cliente não identificado")
+
+    with col2:
+        cliente_cnpj = st.text_input("CPF / CNPJ do cliente", value="")
+
+    produto_opcao = st.selectbox(
+        "Produto",
+        produtos_com_estoque["id"].tolist(),
+        format_func=lambda x: produtos_com_estoque[produtos_com_estoque["id"] == x]["descricao"].iloc[0]
+    )
+
+    produto = produtos_com_estoque[produtos_com_estoque["id"] == produto_opcao].iloc[0]
+
+    colp1, colp2, colp3 = st.columns(3)
+
+    with colp1:
+        st.info(f"Estoque atual: {produto['saldo_estoque']}")
+
+    with colp2:
+        st.info(f"Custo médio: {moeda(float(produto['custo_medio']))}")
+
+    with colp3:
+        st.info(f"Preço venda atual: {moeda(float(produto['preco_venda']))}")
+
+    colv1, colv2, colv3 = st.columns(3)
+
+    with colv1:
+        quantidade = st.number_input(
+            "Quantidade",
+            min_value=0.01,
+            max_value=float(produto["saldo_estoque"]),
+            value=1.0,
+            step=1.0
+        )
+
+    with colv2:
+        preco_padrao = float(produto["preco_venda"]) if float(produto["preco_venda"]) > 0 else float(produto["custo_medio"])
+        valor_unitario = st.number_input(
+            "Valor unitário",
+            min_value=0.0,
+            value=preco_padrao,
+            step=0.01
+        )
+
+    with colv3:
+        valor_total = quantidade * valor_unitario
+        st.info(f"Total: {moeda(valor_total)}")
+
+    coldata1, coldata2 = st.columns(2)
+
+    with coldata1:
+        data_venda = st.date_input("Data da venda", value=date.today())
+
+    with coldata2:
+        vencimento = st.date_input("Vencimento", value=date.today())
+
+    confirmar = st.form_submit_button("Registrar venda")
+
+if confirmar:
+    resultado = registrar_venda(
+        cliente_nome,
+        cliente_cnpj,
+        produto,
+        quantidade,
+        valor_unitario,
+        data_venda.strftime("%Y-%m-%d"),
+        vencimento.strftime("%Y-%m-%d")
+    )
+
+    if resultado["sucesso"]:
+        st.success(
+            f"Venda registrada com sucesso. Venda ID: {resultado['venda_id']}. "
+            f"Valor: {moeda(resultado['valor_total'])}. Estoque baixado e conta a receber criada."
+        )
+        st.rerun()
+    else:
+        st.error(f"Erro ao registrar venda: {resultado['erro']}")
+
+st.divider()
+
+st.subheader("Produtos disponíveis")
+
+df_exibicao = produtos_com_estoque.copy()
+df_exibicao["custo_medio"] = df_exibicao["custo_medio"].apply(moeda)
+df_exibicao["preco_venda"] = df_exibicao["preco_venda"].apply(moeda)
+
+df_exibicao = df_exibicao[[
+    "id",
+    "descricao",
+    "categoria",
+    "saldo_estoque",
+    "custo_medio",
+    "preco_venda"
+]]
+
+df_exibicao = df_exibicao.rename(columns={
+    "id": "ID",
+    "descricao": "Produto",
+    "categoria": "Categoria",
+    "saldo_estoque": "Estoque",
+    "custo_medio": "Custo médio",
+    "preco_venda": "Preço venda"
+})
+
+st.dataframe(
+    df_exibicao,
+    width="stretch",
+    hide_index=True
+)
+
+st.caption("Versão 0.1 - Vendas")

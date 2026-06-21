@@ -1,1 +1,245 @@
-import streamlit as st`nfrom utils.ui import aplicar_estilo_premium`nimport pandas as pd`nimport sqlite3`nfrom datetime import datetime`nfrom utils.formatadores import formatar_data, formatar_moeda`n`nDB_PATH = "bd/gofinance.db"`nEMPRESA_ID_ATIVA = 1`n`nst.set_page_config(`n    page_title="Compras",`n    page_icon="🛒",`n    layout="wide"`n)`n`naplicar_estilo_premium()`n`n`nst.markdown("""`n<style>`n[data-testid="stSidebarNav"] {`n    display: none;`n}`n</style>`n""", unsafe_allow_html=True)`n`n`ndef menu_goia():`n    st.sidebar.markdown("## GOIA")`n    st.sidebar.page_link("app.py", label="Dashboard", icon="🏠")`n    st.sidebar.page_link("pages/1_Importar_Documento.py", label="Importar Documento", icon="📄")`n    st.sidebar.page_link("pages/9_Clientes.py", label="Clientes", icon="👥")`n    st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")`n    st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")`n    st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")`n    st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")`n    st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")`n`nmenu_goia()`n`n`n`nst.title("🛒 Compras")`nst.caption("Compras importadas, itens vinculados e origem fiscal.")`n`ndef moeda(valor):`n    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")`n`ndef carregar_compras():`n    conn = sqlite3.connect(DB_PATH)`n`n    query = """`n        SELECT`n            c.id,`n            c.documento_id,`n            COALESCE(f.nome, 'Fornecedor não identificado') AS fornecedor,`n            COALESCE(d.numero_nfe, '') AS numero_nfe,`n            COALESCE(d.serie_nfe, '') AS serie_nfe,`n            COALESCE(d.chave_acesso_nfe, '') AS chave_acesso_nfe,`n            c.descricao,`n            c.valor_total,`n            c.data_compra,`n            c.status,`n            c.criado_em`n        FROM compras c`n        LEFT JOIN fornecedores f ON f.id = c.fornecedor_id`n        LEFT JOIN documentos d ON d.id = c.documento_id`n        WHERE c.empresa_id = ?`n        ORDER BY c.data_compra DESC, c.id DESC`n    """`n`n    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA,))`n    conn.close()`n`n    return df`n`ndef carregar_itens_compra(compra_id):`n    conn = sqlite3.connect(DB_PATH)`n`n    query = """`n        SELECT`n            ci.id,`n            COALESCE(p.descricao, ci.descricao) AS produto,`n            ci.descricao,`n            ci.quantidade,`n            ci.valor_unitario,`n            ci.valor_total`n        FROM compras_itens ci`n        LEFT JOIN produtos p ON p.id = ci.produto_id`n        WHERE ci.compra_id = ?`n          AND ci.empresa_id = ?`n        ORDER BY ci.id`n    """`n`n    df = pd.read_sql_query(query, conn, params=(compra_id, EMPRESA_ID_ATIVA))`n    conn.close()`n`n    return df`n`ndf = carregar_compras()`n`nif df.empty:`n    st.warning("Nenhuma compra cadastrada ainda.")`n    st.stop()`n`ndf["valor_total"] = pd.to_numeric(df["valor_total"], errors="coerce").fillna(0)`n`ntotal_aberto = df[df["status"] == "Aberta"]["valor_total"].sum()`ntotal_compras = df["valor_total"].sum()`nqtd_compras = len(df)`n`ncol1, col2, col3 = st.columns(3)`n`nwith col1:`n    st.metric("Total em aberto", moeda(total_aberto))`n`nwith col2:`n    st.metric("Total comprado", moeda(total_compras))`n`nwith col3:`n    st.metric("Compras", qtd_compras)`n`nst.divider()`n`ncol_f1, col_f2 = st.columns(2)`n`nwith col_f1:`n    filtro_status = st.selectbox(`n        "Filtrar por status",`n        ["Todos"] + sorted(df["status"].dropna().unique().tolist())`n    )`n`nwith col_f2:`n    filtro_fornecedor = st.selectbox(`n        "Filtrar por fornecedor",`n        ["Todos"] + sorted(df["fornecedor"].dropna().unique().tolist())`n    )`n`ndf_filtrado = df.copy()`n`nif filtro_status != "Todos":`n    df_filtrado = df_filtrado[df_filtrado["status"] == filtro_status]`n`nif filtro_fornecedor != "Todos":`n    df_filtrado = df_filtrado[df_filtrado["fornecedor"] == filtro_fornecedor]`n`ndf_exibicao = df_filtrado.copy()`n`ndf_exibicao["Origem"] = df_exibicao.apply(`n    lambda r: f"NF-e {r['numero_nfe']}/Série {r['serie_nfe']}" if str(r["numero_nfe"]).strip() else "Documento",`n    axis=1`n)`n`ndf_exibicao["valor_total"] = df_exibicao["valor_total"].apply(moeda)`n`ndf_exibicao = df_exibicao[[`n    "id",`n    "fornecedor",`n    "Origem",`n    "descricao",`n    "valor_total",`n    "data_compra",`n    "status"`n]]`n`ndf_exibicao = df_exibicao.rename(columns={`n    "id": "ID",`n    "fornecedor": "Fornecedor",`n    "descricao": "Descrição",`n    "valor_total": "Valor",`n    "data_compra": "Data",`n    "status": "Status"`n})`n`nst.dataframe(`n    df_exibicao,`n    width="stretch",`n    hide_index=True`n)`n`nst.divider()`n`nst.subheader("Detalhar compra")`n`nids = df_filtrado["id"].tolist()`n`nif not ids:`n    st.info("Nenhuma compra encontrada com os filtros selecionados.")`n    st.stop()`n`ncompra_id = st.selectbox("Selecione o ID da compra", ids)`n`ncompra = df[df["id"] == compra_id].iloc[0]`n`ncol_d1, col_d2, col_d3 = st.columns(3)`n`nwith col_d1:`n    st.info(f"Fornecedor: {compra['fornecedor']}")`n`nwith col_d2:`n    st.info(f"Valor: {moeda(float(compra['valor_total']))}")`n`nwith col_d3:`n    st.info(f"Status: {compra['status']}")`n`nst.markdown("### Dados fiscais")`n`ncol_nf1, col_nf2 = st.columns(2)`n`nwith col_nf1:`n    st.text_input("NF-e", value=compra["numero_nfe"], disabled=True)`n`nwith col_nf2:`n    st.text_input("Série", value=compra["serie_nfe"], disabled=True)`n`nst.text_input("Chave de acesso", value=compra["chave_acesso_nfe"], disabled=True)`n`nst.markdown("### Itens da compra")`n`ndf_itens = carregar_itens_compra(compra_id)`n`nif df_itens.empty:`n    st.warning("Nenhum item vinculado a esta compra.")`nelse:`n    df_itens_exibicao = df_itens.copy()`n    df_itens_exibicao["valor_unitario"] = df_itens_exibicao["valor_unitario"].apply(moeda)`n    df_itens_exibicao["valor_total"] = df_itens_exibicao["valor_total"].apply(moeda)`n`n    df_itens_exibicao = df_itens_exibicao.rename(columns={`n        "id": "ID",`n        "produto": "Produto",`n        "descricao": "Descrição",`n        "quantidade": "Quantidade",`n        "valor_unitario": "Valor unitário",`n        "valor_total": "Valor total"`n    })`n`n    st.dataframe(`n        df_itens_exibicao,`n        width="stretch",`n        hide_index=True`n    )`n`nst.caption("Versão 0.1 - Compras")
+import streamlit as st
+from utils.ui import aplicar_estilo_premium
+import pandas as pd
+import sqlite3
+from datetime import datetime
+from utils.formatadores import formatar_data, formatar_moeda
+
+DB_PATH = "bd/gofinance.db"
+EMPRESA_ID_ATIVA = 1
+
+st.set_page_config(
+    page_title="Compras",
+    page_icon="🛒",
+    layout="wide"
+)
+
+aplicar_estilo_premium()
+
+
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+def menu_goia():
+    st.sidebar.markdown("## GOIA")
+    st.sidebar.page_link("app.py", label="Dashboard", icon="🏠")
+    st.sidebar.page_link("pages/1_Importar_Documento.py", label="Importar Documento", icon="📄")
+    st.sidebar.page_link("pages/9_Clientes.py", label="Clientes", icon="👥")
+    st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
+    st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
+    st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+    st.sidebar.page_link("pages/7_Processos_Documentais.py", label="Processos Documentais", icon="🗂️")
+    st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="🏦")
+
+menu_goia()
+
+
+
+st.title("🛒 Compras")
+st.caption("Compras importadas, itens vinculados e origem fiscal.")
+
+def moeda(valor):
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def carregar_compras():
+    conn = sqlite3.connect(DB_PATH)
+
+    query = """
+        SELECT
+            c.id,
+            c.documento_id,
+            COALESCE(f.nome, 'Fornecedor não identificado') AS fornecedor,
+            COALESCE(d.numero_nfe, '') AS numero_nfe,
+            COALESCE(d.serie_nfe, '') AS serie_nfe,
+            COALESCE(d.chave_acesso_nfe, '') AS chave_acesso_nfe,
+            c.descricao,
+            c.valor_total,
+            c.data_compra,
+            c.status,
+            c.criado_em
+        FROM compras c
+        LEFT JOIN fornecedores f ON f.id = c.fornecedor_id
+        LEFT JOIN documentos d ON d.id = c.documento_id
+        WHERE c.empresa_id = ?
+        ORDER BY c.data_compra DESC, c.id DESC
+    """
+
+    df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA,))
+    conn.close()
+
+    return df
+
+def carregar_itens_compra(compra_id):
+    conn = sqlite3.connect(DB_PATH)
+
+    query = """
+        SELECT
+            ci.id,
+            COALESCE(p.descricao, ci.descricao) AS produto,
+            ci.descricao,
+            ci.quantidade,
+            ci.valor_unitario,
+            ci.valor_total
+        FROM compras_itens ci
+        LEFT JOIN produtos p ON p.id = ci.produto_id
+        WHERE ci.compra_id = ?
+          AND ci.empresa_id = ?
+        ORDER BY ci.id
+    """
+
+    df = pd.read_sql_query(query, conn, params=(compra_id, EMPRESA_ID_ATIVA))
+    conn.close()
+
+    return df
+
+df = carregar_compras()
+
+if df.empty:
+    st.warning("Nenhuma compra cadastrada ainda.")
+    st.stop()
+
+df["valor_total"] = pd.to_numeric(df["valor_total"], errors="coerce").fillna(0)
+
+total_aberto = df[df["status"] == "Aberta"]["valor_total"].sum()
+total_compras = df["valor_total"].sum()
+qtd_compras = len(df)
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric("Total em aberto", moeda(total_aberto))
+
+with col2:
+    st.metric("Total comprado", moeda(total_compras))
+
+with col3:
+    st.metric("Compras", qtd_compras)
+
+st.divider()
+
+col_f1, col_f2 = st.columns(2)
+
+with col_f1:
+    filtro_status = st.selectbox(
+        "Filtrar por status",
+        ["Todos"] + sorted(df["status"].dropna().unique().tolist())
+    )
+
+with col_f2:
+    filtro_fornecedor = st.selectbox(
+        "Filtrar por fornecedor",
+        ["Todos"] + sorted(df["fornecedor"].dropna().unique().tolist())
+    )
+
+df_filtrado = df.copy()
+
+if filtro_status != "Todos":
+    df_filtrado = df_filtrado[df_filtrado["status"] == filtro_status]
+
+if filtro_fornecedor != "Todos":
+    df_filtrado = df_filtrado[df_filtrado["fornecedor"] == filtro_fornecedor]
+
+df_exibicao = df_filtrado.copy()
+
+df_exibicao["Origem"] = df_exibicao.apply(
+    lambda r: f"NF-e {r['numero_nfe']}/Série {r['serie_nfe']}" if str(r["numero_nfe"]).strip() else "Documento",
+    axis=1
+)
+
+df_exibicao["valor_total"] = df_exibicao["valor_total"].apply(moeda)
+
+df_exibicao = df_exibicao[[
+    "id",
+    "fornecedor",
+    "Origem",
+    "descricao",
+    "valor_total",
+    "data_compra",
+    "status"
+]]
+
+df_exibicao = df_exibicao.rename(columns={
+    "id": "ID",
+    "fornecedor": "Fornecedor",
+    "descricao": "Descrição",
+    "valor_total": "Valor",
+    "data_compra": "Data",
+    "status": "Status"
+})
+
+st.dataframe(
+    df_exibicao,
+    width="stretch",
+    hide_index=True
+)
+
+st.divider()
+
+st.subheader("Detalhar compra")
+
+ids = df_filtrado["id"].tolist()
+
+if not ids:
+    st.info("Nenhuma compra encontrada com os filtros selecionados.")
+    st.stop()
+
+compra_id = st.selectbox("Selecione o ID da compra", ids)
+
+compra = df[df["id"] == compra_id].iloc[0]
+
+col_d1, col_d2, col_d3 = st.columns(3)
+
+with col_d1:
+    st.info(f"Fornecedor: {compra['fornecedor']}")
+
+with col_d2:
+    st.info(f"Valor: {moeda(float(compra['valor_total']))}")
+
+with col_d3:
+    st.info(f"Status: {compra['status']}")
+
+st.markdown("### Dados fiscais")
+
+col_nf1, col_nf2 = st.columns(2)
+
+with col_nf1:
+    st.text_input("NF-e", value=compra["numero_nfe"], disabled=True)
+
+with col_nf2:
+    st.text_input("Série", value=compra["serie_nfe"], disabled=True)
+
+st.text_input("Chave de acesso", value=compra["chave_acesso_nfe"], disabled=True)
+
+st.markdown("### Itens da compra")
+
+df_itens = carregar_itens_compra(compra_id)
+
+if df_itens.empty:
+    st.warning("Nenhum item vinculado a esta compra.")
+else:
+    df_itens_exibicao = df_itens.copy()
+    df_itens_exibicao["valor_unitario"] = df_itens_exibicao["valor_unitario"].apply(moeda)
+    df_itens_exibicao["valor_total"] = df_itens_exibicao["valor_total"].apply(moeda)
+
+    df_itens_exibicao = df_itens_exibicao.rename(columns={
+        "id": "ID",
+        "produto": "Produto",
+        "descricao": "Descrição",
+        "quantidade": "Quantidade",
+        "valor_unitario": "Valor unitário",
+        "valor_total": "Valor total"
+    })
+
+    st.dataframe(
+        df_itens_exibicao,
+        width="stretch",
+        hide_index=True
+    )
+
+st.caption("Versão 0.1 - Compras")
