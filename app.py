@@ -1,6 +1,8 @@
 import sqlite3
 import hashlib
+import re
 from pathlib import Path
+from io import BytesIO
 import pandas as pd
 import streamlit as st
 
@@ -88,6 +90,64 @@ def criar_empresa(nome, cnpj, email, telefone, senha):
     conn.close()
     return True, "Empresa cadastrada. Agora acesse o sistema."
 
+
+def formatar_cnpj(valor):
+    n = limpar_doc(valor)
+    if len(n) == 14:
+        return f"{n[:2]}.{n[2:5]}.{n[5:8]}/{n[8:12]}-{n[12:]}"
+    return valor or ""
+
+def limpar_espacos_ocr(valor):
+    if not valor:
+        return ""
+    if valor.count(" ") >= max(3, len(valor) // 4):
+        return valor.replace(" ", "").strip()
+    return valor.strip()
+
+def valor_apos_rotulo(texto, rotulo):
+    linhas = [x.strip() for x in texto.splitlines() if x.strip()]
+    for i, linha in enumerate(linhas):
+        if linha.upper() == rotulo.upper() and i + 1 < len(linhas):
+            return limpar_espacos_ocr(linhas[i + 1])
+    return ""
+
+def extrair_dados_cartao_cnpj_pdf(arquivo):
+    dados = {"nome": "", "cnpj": "", "email": "", "telefone": ""}
+
+    try:
+        from pypdf import PdfReader
+        arquivo.seek(0)
+        reader = PdfReader(BytesIO(arquivo.read()))
+        texto = ""
+        for page in reader.pages:
+            texto += page.extract_text() or ""
+            texto += "\n"
+    except Exception:
+        return dados
+
+    nome = valor_apos_rotulo(texto, "NOME EMPRESARIAL")
+    cnpj = ""
+
+    texto_sem_espacos = re.sub(r"\s+", "", texto)
+    m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_sem_espacos)
+    if m:
+        cnpj = formatar_cnpj(m.group())
+
+    texto_normal = re.sub(r"\s+", " ", texto)
+
+    email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", texto_normal)
+    if email_match:
+        dados["email"] = email_match.group()
+
+    tel_match = re.search(r"\(?\d{2}\)?\s?\d{4,5}-?\d{4}", texto_normal)
+    if tel_match:
+        dados["telefone"] = tel_match.group()
+
+    dados["nome"] = nome
+    dados["cnpj"] = cnpj
+    return dados
+
+
 def tela_login():
     st.markdown("""
     <style>
@@ -146,33 +206,63 @@ def tela_login():
     with aba_cadastro:
         st.subheader("Cadastrar empresa")
 
+        st.caption("Primeiro anexe o Cartão CNPJ oficial. A GOIA preencherá Razão Social e CNPJ a partir do documento.")
+
         documento_empresa = st.file_uploader(
             "Anexar Cartão CNPJ / documento oficial da empresa",
-            type=["pdf", "xml", "csv", "txt"],
+            type=["pdf"],
             key="documento_cadastro_empresa"
         )
 
+        dados_doc = {"nome": "", "cnpj": "", "email": "", "telefone": ""}
+
         if not documento_empresa:
-            st.warning("Anexe o Cartão CNPJ ou documento oficial da empresa para iniciar o cadastro.")
+            st.warning("Anexe o Cartão CNPJ para liberar o cadastro.")
         else:
-            st.success(f"Documento anexado: {documento_empresa.name}")
+            dados_doc = extrair_dados_cartao_cnpj_pdf(documento_empresa)
+
+            if dados_doc.get("nome") and dados_doc.get("cnpj"):
+                st.success(f"Documento lido: {documento_empresa.name}")
+            else:
+                st.error("Documento anexado, mas não foi possível identificar Razão Social e CNPJ. Envie o Cartão CNPJ oficial em PDF.")
+
+        documento_valido = bool(dados_doc.get("nome")) and bool(dados_doc.get("cnpj"))
+
+        nome_oficial = dados_doc.get("nome", "")
+        cnpj_oficial = dados_doc.get("cnpj", "")
 
         with st.form("cadastro"):
-            nome = st.text_input("Razão Social / Nome da empresa")
-            cnpj = st.text_input("CNPJ")
-            email = st.text_input("E-mail")
-            telefone = st.text_input("Telefone")
+            st.text_input(
+                "Razão Social identificada no Cartão CNPJ",
+                value=nome_oficial,
+                disabled=True
+            )
+
+            st.text_input(
+                "CNPJ identificado no Cartão CNPJ",
+                value=cnpj_oficial,
+                disabled=True
+            )
+
+            email = st.text_input("E-mail de acesso", value=dados_doc.get("email", ""))
+            telefone = st.text_input("Telefone / WhatsApp", value=dados_doc.get("telefone", ""))
             senha = st.text_input("Senha", type="password")
             confirmar = st.text_input("Confirmar senha", type="password")
-            criar = st.form_submit_button("Criar conta")
+
+            criar = st.form_submit_button(
+                "Criar conta",
+                disabled=not documento_valido
+            )
 
         if criar:
-            if senha != confirmar:
+            if not documento_valido:
+                st.error("Cadastro bloqueado: anexe o Cartão CNPJ oficial.")
+            elif senha != confirmar:
                 st.error("As senhas não conferem.")
-            elif not nome or not cnpj or not senha:
-                st.error("Preencha nome, CNPJ e senha.")
+            elif not email.strip() or not telefone.strip() or not senha:
+                st.error("Informe e-mail, telefone e senha.")
             else:
-                ok, msg = criar_empresa(nome, cnpj, email, telefone, senha)
+                ok, msg = criar_empresa(nome_oficial, cnpj_oficial, email, telefone, senha)
                 st.success(msg) if ok else st.warning(msg)
 
     st.stop()
