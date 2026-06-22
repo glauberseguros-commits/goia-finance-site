@@ -178,3 +178,41 @@ def menu_principal():
     st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
     st.sidebar.page_link("pages/8_Movimentos_Bancarios.py", label="Movimentos Bancários", icon="🏦")
     st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="⚖️")
+
+
+
+def kpi_card(titulo, valor, subtitulo="", status="neutro"):
+    cores = {
+        "positivo": "#16a34a",
+        "negativo": "#dc2626",
+        "alerta": "#f97316",
+        "neutro": "#2563eb",
+    }
+    cor = cores.get(status, cores["neutro"])
+
+    st.markdown(f"""
+    <div class="goia-section" style="padding:20px 22px;">
+        <div style="font-size:12px; font-weight:900; color:#64748b; text-transform:uppercase; letter-spacing:.08em;">
+            {titulo}
+        </div>
+        <div style="font-size:30px; font-weight:950; color:#111827; margin-top:6px;">
+            {valor}
+        </div>
+        <div style="font-size:13px; color:{cor}; font-weight:800; margin-top:6px;">
+            {subtitulo}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def section_title(titulo, subtitulo=""):
+    st.markdown(f"""
+    <div style="margin-top:28px; margin-bottom:12px;">
+        <div style="font-size:22px; font-weight:950; color:#111827; letter-spacing:-.03em;">
+            {titulo}
+        </div>
+        <div style="font-size:14px; color:#64748b;">
+            {subtitulo}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
