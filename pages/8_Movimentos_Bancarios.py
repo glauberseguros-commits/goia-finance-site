@@ -4,17 +4,19 @@ import pandas as pd
 import streamlit as st
 
 from utils.ui import aplicar_estilo_premium, moeda
+from utils.premium import aplicar_premium_goia, hero
 
 DB = "bd/gofinance.db"
 EMPRESA_ID_ATIVA = 2
 
 st.set_page_config(
-    page_title="Movimentos Bancários",
-    page_icon="🏦",
+    page_title="Movimentos Bancarios",
+    page_icon="GOIA",
     layout="wide"
 )
 
 aplicar_estilo_premium()
+aplicar_premium_goia()
 
 with st.sidebar:
     st.markdown("### GOIA")
@@ -60,8 +62,11 @@ def carregar_movimentos():
     conn.close()
     return df
 
-st.title("🏦 Movimentos Bancários")
-st.caption("Movimentos importados de extratos OFX para conferência, auditoria e conciliação financeira.")
+hero(
+    "Movimentos Bancarios",
+    "Central de auditoria financeira para extratos OFX, conciliacao bancaria e rastreabilidade de movimentacoes.",
+    icone="GOIA"
+)
 
 df = carregar_movimentos()
 
