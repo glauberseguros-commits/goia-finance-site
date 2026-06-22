@@ -6,7 +6,7 @@ from io import BytesIO
 import pandas as pd
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
-from utils.premium import aplicar_premium_goia, hero
+from utils.premium import aplicar_premium_goia, hero, kpi_card, section_title
 from utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido, formatar_telefone
 
 DB_PATH = Path("bd/gofinance.db")
@@ -416,6 +416,61 @@ recebimentos = df[df["tipo"] == "Receber"]["valor"].sum() if not df.empty else 0
 pagamentos = abs(df[df["tipo"] == "Pagar"]["valor"].sum()) if not df.empty else 0
 saldo = recebimentos - pagamentos
 
+
+def contar_tabela(nome_tabela, where="empresa_id = ?", params=None):
+    conn = conectar()
+    cur = conn.cursor()
+    params = params or (EMPRESA_ID,)
+    try:
+        cur.execute(f"SELECT COUNT(*) FROM {nome_tabela} WHERE {where}", params)
+        valor = cur.fetchone()[0] or 0
+    except Exception:
+        valor = 0
+    conn.close()
+    return valor
+
+
+def somar_tabela(nome_tabela, coluna, where="empresa_id = ?", params=None):
+    conn = conectar()
+    cur = conn.cursor()
+    params = params or (EMPRESA_ID,)
+    try:
+        cur.execute(f"SELECT COALESCE(SUM({coluna}), 0) FROM {nome_tabela} WHERE {where}", params)
+        valor = cur.fetchone()[0] or 0
+    except Exception:
+        valor = 0
+    conn.close()
+    return valor
+
+
+receber_aberto = somar_tabela(
+    "contas_receber",
+    "valor",
+    "empresa_id = ? AND COALESCE(status, 'Pendente') NOT IN ('Baixada', 'Baixado', 'Liquidado')"
+)
+
+pagar_aberto = somar_tabela(
+    "contas_pagar",
+    "valor",
+    "empresa_id = ? AND COALESCE(status, 'Pendente') NOT IN ('Baixada', 'Baixado', 'Liquidado')"
+)
+
+saldo_projetado = receber_aberto - pagar_aberto
+
+documentos_importados = contar_tabela("documentos")
+processos_abertos = contar_tabela(
+    "processos_documentais",
+    "empresa_id = ? AND COALESCE(status, 'Aberto') <> 'Concluído'"
+)
+pendencias_abertas = contar_tabela(
+    "processo_pendencias",
+    "empresa_id = ? AND COALESCE(status, 'Pendente') = 'Pendente'"
+)
+movimentos_nao_conciliados = contar_tabela(
+    "movimentos_bancarios",
+    "empresa_id = ? AND COALESCE(conciliado, 0) = 0"
+)
+
 st.sidebar.markdown("## GOIA")
 st.sidebar.caption(st.session_state.get("empresa_nome"))
 
@@ -432,17 +487,54 @@ st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="
 st.sidebar.page_link("pages/8_Movimentos_Bancarios.py", label="Movimentos Bancários", icon="🏦")
 st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="⚖️")
 
-hero("Dashboard Executivo", f"Empresa ativa: {st.session_state.get('empresa_nome')}", icone="💰")
+hero(
+    "Dashboard Executivo",
+    f"Empresa ativa: {st.session_state.get('empresa_nome')} | Visao consolidada de caixa, documentos, pendencias e conciliacao.",
+    icone="GOIA"
+)
 
-c1, c2, c3 = st.columns(3)
-c1.metric("Recebimentos", moeda(recebimentos))
-c2.metric("Pagamentos", moeda(pagamentos))
-c3.metric("Saldo operacional", moeda(saldo))
+section_title(
+    "Resumo financeiro",
+    "Indicadores consolidados de recebimentos, pagamentos e saldo projetado."
+)
 
-st.divider()
-st.subheader("Movimentações financeiras")
+k1, k2, k3 = st.columns(3)
+
+with k1:
+    kpi_card("Receber em aberto", moeda(receber_aberto), "Titulos ainda nao baixados", "positivo")
+
+with k2:
+    kpi_card("Pagar em aberto", moeda(pagar_aberto), "Obrigacoes financeiras pendentes", "alerta")
+
+with k3:
+    status_saldo = "positivo" if saldo_projetado >= 0 else "negativo"
+    kpi_card("Saldo projetado", moeda(saldo_projetado), "Receber aberto menos pagar aberto", status_saldo)
+
+section_title(
+    "Governanca operacional",
+    "Controle de documentos, processos, pendencias e conciliacoes."
+)
+
+g1, g2, g3, g4 = st.columns(4)
+
+with g1:
+    kpi_card("Documentos", documentos_importados, "Documentos importados", "neutro")
+
+with g2:
+    kpi_card("Processos abertos", processos_abertos, "Fluxos documentais ativos", "alerta" if processos_abertos else "positivo")
+
+with g3:
+    kpi_card("Pendencias", pendencias_abertas, "Itens aguardando evidencias", "alerta" if pendencias_abertas else "positivo")
+
+with g4:
+    kpi_card("Nao conciliados", movimentos_nao_conciliados, "Movimentos bancarios pendentes", "alerta" if movimentos_nao_conciliados else "positivo")
+
+section_title(
+    "Movimentacoes financeiras",
+    "Ultimos registros financeiros consolidados entre contas a receber e contas a pagar."
+)
 
 if df.empty:
-    st.info("Nenhuma movimentação encontrada para esta empresa.")
+    st.info("Nenhuma movimentacao encontrada para esta empresa.")
 else:
-    st.dataframe(df, width="stretch", hide_index=True)
+    st.dataframe(df, use_container_width=True, hide_index=True)
