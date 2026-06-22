@@ -1,5 +1,6 @@
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
+from utils.premium import aplicar_premium_goia, hero
 import pandas as pd
 import sqlite3
 from utils.financeiro import baixar_conta_pagar
@@ -14,11 +15,12 @@ EMPRESA_ID_ATIVA = empresa_logada()
 
 st.set_page_config(
     page_title="Contas a Pagar",
-    page_icon="💸",
+    page_icon="GOIA",
     layout="wide"
 )
 
 aplicar_estilo_premium()
+aplicar_premium_goia()
 
 st.markdown("""
 <style>
@@ -43,8 +45,11 @@ def menu_goia():
 
 menu_goia()
 
-st.title("💸 Contas a Pagar")
-st.caption("Títulos pendentes, baixados e em aberto.")
+hero(
+    "Contas a Pagar",
+    "Gestao dos pagamentos, fornecedores, documentos fiscais, baixas e rastreabilidade financeira.",
+    icone="GOIA"
+)
 
 
 def moeda(valor):
