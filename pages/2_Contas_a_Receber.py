@@ -1,10 +1,9 @@
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
+from utils.premium import aplicar_premium_goia, hero
 import pandas as pd
 import sqlite3
-from utils.financeiro import baixar_conta_receber
-from datetime import datetime
-from utils.formatadores import formatar_data
+from datetime import datetime, date
 from utils.auth import empresa_logada, exigir_login
 
 DB_PATH = "bd/gofinance.db"
@@ -13,12 +12,13 @@ exigir_login()
 EMPRESA_ID_ATIVA = empresa_logada()
 
 st.set_page_config(
-    page_title="Contas a Receber",
-    page_icon="💵",
+    page_title="GOIA | Contas a Receber",
+    page_icon="GOIA",
     layout="wide"
 )
 
 aplicar_estilo_premium()
+aplicar_premium_goia()
 
 st.markdown("""
 <style>
@@ -43,8 +43,11 @@ def menu_goia():
 
 menu_goia()
 
-st.title("💵 Contas a Receber")
-st.caption("Títulos pendentes, baixados e em aberto.")
+hero(
+    "Contas a Receber",
+    "Gestao dos recebimentos, clientes, documentos fiscais, baixas e rastreabilidade financeira.",
+    icone="GOIA"
+)
 
 
 def moeda(valor):
@@ -52,7 +55,6 @@ def moeda(valor):
         valor = float(valor or 0)
     except Exception:
         valor = 0.0
-
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
@@ -62,13 +64,22 @@ def carregar_contas_receber():
     query = """
         SELECT
             cr.id,
+            cr.empresa_id,
+            cr.cliente_id,
             COALESCE(c.nome, 'Cliente não identificado') AS cliente,
-            COALESCE(d.tipo_documento, 'Documento') AS documento,
+            COALESCE(c.cnpj_cpf, '') AS cnpj_cpf,
+            cr.documento_id,
+            COALESCE(d.tipo_documento, 'Sem documento') AS documento,
+            COALESCE(d.numero_nfe, '') AS numero_nfe,
+            COALESCE(d.chave_acesso_nfe, '') AS chave_acesso_nfe,
             cr.descricao,
             cr.valor,
             cr.data_emissao,
             cr.data_vencimento,
-            cr.status,
+            COALESCE(cr.data_baixa, '') AS data_baixa,
+            COALESCE(cr.valor_baixado, 0) AS valor_baixado,
+            COALESCE(cr.observacao_baixa, '') AS observacao_baixa,
+            COALESCE(cr.status, 'Pendente') AS status,
             cr.criado_em
         FROM contas_receber cr
         LEFT JOIN clientes c
@@ -78,7 +89,14 @@ def carregar_contas_receber():
             ON d.id = cr.documento_id
            AND d.empresa_id = cr.empresa_id
         WHERE cr.empresa_id = ?
-        ORDER BY cr.data_emissao DESC, cr.id DESC
+        ORDER BY
+            CASE
+                WHEN COALESCE(cr.status, 'Pendente') IN ('Pendente', 'Aberto') THEN 1
+                WHEN COALESCE(cr.status, 'Pendente') IN ('Baixada', 'Baixado', 'Liquidado') THEN 2
+                ELSE 3
+            END,
+            cr.data_vencimento ASC,
+            cr.id DESC
     """
 
     df = pd.read_sql_query(query, conn, params=(EMPRESA_ID_ATIVA,))
@@ -93,56 +111,62 @@ if df.empty:
     st.stop()
 
 df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0)
+df["valor_baixado"] = pd.to_numeric(df["valor_baixado"], errors="coerce").fillna(0)
 df["status"] = df["status"].fillna("Pendente")
 
-hoje = datetime.today().date()
+df["data_vencimento_dt"] = pd.to_datetime(df["data_vencimento"], errors="coerce")
+df["data_baixa_dt"] = pd.to_datetime(df["data_baixa"], errors="coerce")
 
+hoje = pd.Timestamp(date.today())
 
-def calcular_dias(row):
-    data_ref = row["data_vencimento"] or row["data_emissao"]
+status_baixado = ["Baixada", "Baixado", "Liquidado"]
+status_aberto = ~df["status"].isin(status_baixado)
 
-    if not data_ref:
-        return 0
+total_a_receber = df[status_aberto]["valor"].sum()
+total_baixado = df[df["status"].isin(status_baixado)]["valor_baixado"].sum()
+total_vencido = df[
+    status_aberto &
+    df["data_vencimento_dt"].notna() &
+    (df["data_vencimento_dt"] < hoje)
+]["valor"].sum()
 
-    try:
-        data = datetime.strptime(str(data_ref), "%Y-%m-%d").date()
-        return max((hoje - data).days, 0)
-    except Exception:
-        return 0
+qtd_pendente = len(df[status_aberto])
+qtd_sem_documento = len(df[df["documento_id"].isna()])
+qtd_sem_cliente = len(df[df["cliente"] == "Cliente não identificado"])
 
-
-df["dias_em_aberto"] = df.apply(calcular_dias, axis=1)
-
-total_pendente = df[df["status"] == "Pendente"]["valor"].sum()
-total_baixado = df[df["status"] == "Baixada"]["valor"].sum()
-qtd_pendente = len(df[df["status"] == "Pendente"])
-
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.metric("A receber", moeda(total_pendente))
+    st.metric("A Receber", moeda(total_a_receber))
 
 with col2:
-    st.metric("Baixado", moeda(total_baixado))
+    st.metric("Recebido / Baixado", moeda(total_baixado))
 
 with col3:
-    st.metric("Pendentes", qtd_pendente)
+    st.metric("Vencido", moeda(total_vencido))
+
+with col4:
+    st.metric("Títulos Pendentes", qtd_pendente)
 
 st.divider()
 
-col_f1, col_f2 = st.columns(2)
+st.subheader("Filtros")
 
-with col_f1:
-    filtro_status = st.selectbox(
-        "Filtrar por status",
-        ["Todos"] + sorted(df["status"].dropna().unique().tolist())
-    )
+colf1, colf2, colf3, colf4 = st.columns(4)
 
-with col_f2:
-    filtro_cliente = st.selectbox(
-        "Filtrar por cliente",
-        ["Todos"] + sorted(df["cliente"].dropna().unique().tolist())
-    )
+with colf1:
+    status_opcoes = ["Todos"] + sorted(df["status"].dropna().unique().tolist())
+    filtro_status = st.selectbox("Status", status_opcoes)
+
+with colf2:
+    clientes_opcoes = ["Todos"] + sorted(df["cliente"].dropna().unique().tolist())
+    filtro_cliente = st.selectbox("Cliente", clientes_opcoes)
+
+with colf3:
+    filtro_vencidos = st.checkbox("Somente vencidos")
+
+with colf4:
+    filtro_sem_documento = st.checkbox("Sem documento vinculado")
 
 df_filtrado = df.copy()
 
@@ -152,52 +176,118 @@ if filtro_status != "Todos":
 if filtro_cliente != "Todos":
     df_filtrado = df_filtrado[df_filtrado["cliente"] == filtro_cliente]
 
-df_exibicao = df_filtrado.copy()
+if filtro_vencidos:
+    df_filtrado = df_filtrado[
+        (~df_filtrado["status"].isin(status_baixado)) &
+        df_filtrado["data_vencimento_dt"].notna() &
+        (df_filtrado["data_vencimento_dt"] < hoje)
+    ]
+
+if filtro_sem_documento:
+    df_filtrado = df_filtrado[df_filtrado["documento_id"].isna()]
+
+st.divider()
+
+st.subheader("Títulos a Receber")
+
+df_exibicao = df_filtrado[[
+    "id",
+    "cliente",
+    "cnpj_cpf",
+    "documento",
+    "numero_nfe",
+    "descricao",
+    "valor",
+    "data_emissao",
+    "data_vencimento",
+    "status",
+    "data_baixa",
+    "valor_baixado",
+    "documento_id"
+]].copy()
 
 df_exibicao["valor"] = df_exibicao["valor"].apply(moeda)
-
-for col in ["data_emissao", "data_vencimento", "criado_em"]:
-    if col in df_exibicao.columns:
-        df_exibicao[col] = df_exibicao[col].fillna("").apply(formatar_data)
-
-df_exibicao = df_exibicao.rename(columns={
-    "id": "ID",
-    "cliente": "Cliente",
-    "documento": "Documento",
-    "descricao": "Descrição",
-    "valor": "Valor",
-    "data_emissao": "Emissão",
-    "data_vencimento": "Vencimento",
-    "status": "Status",
-    "dias_em_aberto": "Dias em aberto",
-    "criado_em": "Criado em"
-})
+df_exibicao["valor_baixado"] = df_exibicao["valor_baixado"].apply(moeda)
 
 st.dataframe(
     df_exibicao,
-    width="stretch",
+    use_container_width=True,
     hide_index=True
 )
 
 st.divider()
 
-st.subheader("Baixar recebimento manualmente")
+st.subheader("Governança do Recebimento")
 
-ids_pendentes = df[df["status"] == "Pendente"]["id"].tolist()
+colg1, colg2, colg3 = st.columns(3)
 
-if not ids_pendentes:
-    st.info("Não há contas pendentes para baixar.")
+with colg1:
+    st.metric("Sem Documento", qtd_sem_documento)
+
+with colg2:
+    st.metric("Sem Cliente Identificado", qtd_sem_cliente)
+
+with colg3:
+    baixados_sem_valor = len(
+        df[
+            df["status"].isin(status_baixado) &
+            (df["valor_baixado"] <= 0)
+        ]
+    )
+    st.metric("Baixados sem Valor", baixados_sem_valor)
+
+st.caption(
+    "Regra GOIA: todo recebimento deve responder de onde veio, qual cliente, qual documento, se foi conciliado, baixado e arquivado."
+)
+
+st.divider()
+
+st.subheader("Detalhamento do Recebimento")
+
+ids = df_filtrado["id"].tolist()
+
+if not ids:
+    st.info("Nenhum título encontrado com os filtros selecionados.")
 else:
-    conta_id = st.selectbox("Selecione o ID da conta", ids_pendentes)
+    titulo_id = st.selectbox("Selecione um título para análise", ids)
 
-    if st.button("Baixar conta a receber"):
-        try:
-            baixar_conta_receber(
-                int(conta_id),
-                EMPRESA_ID_ATIVA,
-                observacao="Baixa manual via tela Contas a Receber"
-            )
-            st.success("Conta a receber baixada e processo documental atualizado.")
-            st.rerun()
-        except Exception as e:
-            st.error(str(e))
+    detalhe = df[df["id"] == titulo_id].iloc[0]
+
+    col_d1, col_d2 = st.columns(2)
+
+    with col_d1:
+        st.markdown("### Origem")
+        st.write(f"**Cliente:** {detalhe['cliente']}")
+        st.write(f"**CPF/CNPJ:** {detalhe['cnpj_cpf'] or 'Não informado'}")
+        st.write(f"**Documento:** {detalhe['documento']}")
+        st.write(f"**NF-e:** {detalhe['numero_nfe'] or 'Não vinculada'}")
+        st.write(f"**Descrição:** {detalhe['descricao'] or 'Sem descrição'}")
+
+    with col_d2:
+        st.markdown("### Financeiro")
+        st.write(f"**Valor:** {moeda(detalhe['valor'])}")
+        st.write(f"**Vencimento:** {detalhe['data_vencimento'] or 'Não informado'}")
+        st.write(f"**Status:** {detalhe['status']}")
+        st.write(f"**Data da baixa:** {detalhe['data_baixa'] or 'Não baixado'}")
+        st.write(f"**Valor baixado:** {moeda(detalhe['valor_baixado'])}")
+
+    pendencias = []
+
+    if detalhe["cliente"] == "Cliente não identificado":
+        pendencias.append("Cliente não identificado.")
+
+    if pd.isna(detalhe["documento_id"]):
+        pendencias.append("Título sem documento vinculado.")
+
+    if detalhe["status"] not in status_baixado:
+        pendencias.append("Título ainda não baixado.")
+
+    if detalhe["status"] in status_baixado and float(detalhe["valor_baixado"] or 0) <= 0:
+        pendencias.append("Título baixado sem valor de baixa registrado.")
+
+    if pendencias:
+        st.warning("Pendências identificadas:")
+        for p in pendencias:
+            st.write(f"- {p}")
+    else:
+        st.success("Recebimento com informações principais consistentes.")
