@@ -130,6 +130,35 @@ def garantir_estrutura_evidencias():
 garantir_estrutura_evidencias()
 
 
+def garantir_estrutura_movimentos_bancarios():
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS movimentos_bancarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER NOT NULL,
+            conta_bancaria_id INTEGER,
+            data_movimento TEXT,
+            descricao TEXT,
+            documento TEXT,
+            valor REAL,
+            tipo TEXT,
+            conciliado INTEGER DEFAULT 0,
+            conta_receber_id INTEGER,
+            conta_pagar_id INTEGER,
+            origem TEXT,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+garantir_estrutura_movimentos_bancarios()
+
+
 
 def encontrar_documentos(texto):
     encontrados = re.findall(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}|\d{3}\.?\d{3}\.?\d{3}-?\d{2}", texto or "")
