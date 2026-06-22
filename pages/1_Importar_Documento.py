@@ -10,14 +10,16 @@ from pypdf import PdfReader
 
 from utils.auth import empresa_logada, exigir_login
 from utils.ui import aplicar_estilo_premium
+from utils.premium import aplicar_premium_goia, hero
 
 DB_PATH = "bd/gofinance.db"
 
 exigir_login()
 EMPRESA_ID_ATIVA = empresa_logada()
 
-st.set_page_config(page_title="Importar Documento", page_icon="📄", layout="wide")
+st.set_page_config(page_title="Importar Documento", page_icon="GOIA", layout="wide")
 aplicar_estilo_premium()
+aplicar_premium_goia()
 
 
 def menu_goia():
@@ -1401,8 +1403,11 @@ def processar_ofx_bancario(nome_arquivo, texto):
     }
 
 
-st.title("📄 Importar Documento Financeiro")
-st.caption("Envie NF-e, nota de empenho, comprovantes, boletos, extratos e cadastros. A GOIA classifica e cria o fluxo financeiro.")
+hero(
+    "Central de Documentos",
+    "Envie NF-e, OFX, boletos, comprovantes, notas de empenho e documentos cadastrais. A GOIA identifica entidades, cria evidencias, pendencias e movimentacoes financeiras automaticamente.",
+    icone="GOIA"
+)
 
 if not DOC_EMPRESA_LOGADA:
     st.error("Empresa logada sem CPF/CNPJ cadastrado. Corrija o cadastro da empresa antes de importar documentos.")
