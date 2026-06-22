@@ -1153,11 +1153,11 @@ if st.button("Processar todos os documentos", type="primary"):
                     }
 
                     st.warning(f"Arquivo {extensao.upper()} aceito. Processador específico ainda será implementado.")
-                    st.stop()
+                    continue
 
                 else:
                     st.error(f"Formato não suportado: {extensao}")
-                    st.stop()
+                    continue
 
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Tipo", analise["tipo_detectado"])
