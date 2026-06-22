@@ -1105,8 +1105,8 @@ if not DOC_EMPRESA_LOGADA:
     st.stop()
 
 arquivos = st.file_uploader(
-    "Anexar documentos PDF",
-    type=["pdf"],
+    "Anexar documentos",
+    type=["pdf", "ofx", "csv", "txt", "xml"],
     accept_multiple_files=True
 )
 
