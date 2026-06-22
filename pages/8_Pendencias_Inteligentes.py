@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 from utils.auth import empresa_logada, exigir_login
 from utils.ui import aplicar_estilo_premium
+from utils.premium import aplicar_premium_goia, hero
 
 
 DB_PATH = "bd/gofinance.db"
@@ -18,6 +19,7 @@ st.set_page_config(
 )
 
 aplicar_estilo_premium()
+aplicar_premium_goia()
 
 st.markdown("""
 <style>
@@ -45,8 +47,11 @@ def menu_goia():
 
 menu_goia()
 
-st.title("⚠️ Pendências Inteligentes")
-st.caption("Pendências documentais e financeiras que exigem ação operacional.")
+hero(
+    "Pendencias Inteligentes",
+    "Pendencias documentais e financeiras que exigem acao operacional.",
+    icone="GOIA"
+)
 
 
 def conectar():

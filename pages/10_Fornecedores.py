@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 from utils.auth import empresa_logada, exigir_login
 from utils.ui import aplicar_estilo_premium
+from utils.premium import aplicar_premium_goia, hero
 
 DB_PATH = "bd/gofinance.db"
 
@@ -17,6 +18,7 @@ st.set_page_config(
 )
 
 aplicar_estilo_premium()
+aplicar_premium_goia()
 
 st.markdown("""
 <style>
@@ -44,8 +46,11 @@ def menu_goia():
 
 menu_goia()
 
-st.title("🏭 Fornecedores")
-st.caption("Fornecedores identificados automaticamente a partir dos documentos importados.")
+hero(
+    "Fornecedores",
+    "Fornecedores identificados automaticamente a partir dos documentos importados e vinculados aos processos financeiros.",
+    icone="GOIA"
+)
 
 
 def conectar():
