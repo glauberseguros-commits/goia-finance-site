@@ -1287,6 +1287,7 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
     }
 
 
+
 def extrair_tag_ofx(bloco, tag):
     m = re.search(rf"<{tag}>(.*?)(?:\n|<)", bloco or "", flags=re.I | re.S)
     return m.group(1).strip() if m else ""
@@ -1318,13 +1319,30 @@ def processar_ofx_bancario(nome_arquivo, texto):
     conn = conectar()
     cur = conn.cursor()
 
+    cur.execute("""
+        INSERT INTO extratos_bancarios (
+            nome_arquivo,
+            empresa_id
+        )
+        VALUES (?, ?)
+    """, (
+        nome_arquivo,
+        EMPRESA_ID_ATIVA
+    ))
+
+    extrato_id = cur.lastrowid
+
     inseridos = 0
     ignorados = 0
 
     for bloco in blocos:
         data_movimento = converter_data_ofx(extrair_tag_ofx(bloco, "DTPOSTED"))
         valor = converter_valor_ofx(extrair_tag_ofx(bloco, "TRNAMT"))
-        historico = extrair_tag_ofx(bloco, "MEMO") or extrair_tag_ofx(bloco, "NAME") or "Movimento OFX"
+        historico = (
+            extrair_tag_ofx(bloco, "MEMO")
+            or extrair_tag_ofx(bloco, "NAME")
+            or "Movimento OFX"
+        )
         tipo = "Credito" if valor > 0 else "Debito"
 
         cur.execute("""
@@ -1334,7 +1352,12 @@ def processar_ofx_bancario(nome_arquivo, texto):
               AND IFNULL(data_movimento, '') = IFNULL(?, '')
               AND IFNULL(valor, 0) = IFNULL(?, 0)
               AND IFNULL(historico, '') = IFNULL(?, '')
-        """, (EMPRESA_ID_ATIVA, data_movimento, valor, historico))
+        """, (
+            EMPRESA_ID_ATIVA,
+            data_movimento,
+            valor,
+            historico
+        ))
 
         if cur.fetchone():
             ignorados += 1
@@ -1342,6 +1365,7 @@ def processar_ofx_bancario(nome_arquivo, texto):
 
         cur.execute("""
             INSERT INTO movimentos_bancarios (
+                extrato_id,
                 empresa_id,
                 data_movimento,
                 historico,
@@ -1350,8 +1374,9 @@ def processar_ofx_bancario(nome_arquivo, texto):
                 conciliado,
                 nome_origem
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
+            extrato_id,
             EMPRESA_ID_ATIVA,
             data_movimento,
             historico[:250],
@@ -1372,6 +1397,7 @@ def processar_ofx_bancario(nome_arquivo, texto):
         "total_movimentos": len(blocos),
         "movimentos_inseridos": inseridos,
         "movimentos_ignorados": ignorados,
+        "extrato_id": extrato_id,
     }
 
 
