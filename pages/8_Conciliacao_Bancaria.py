@@ -1,5 +1,6 @@
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
+from utils.premium import aplicar_premium_goia, hero
 import pandas as pd
 import sqlite3
 from utils.formatadores import formatar_moeda, formatar_data
@@ -17,6 +18,7 @@ st.set_page_config(
 )
 
 aplicar_estilo_premium()
+aplicar_premium_goia()
 
 st.markdown("""
 <style>
@@ -44,8 +46,11 @@ def menu_goia():
 
 menu_goia()
 
-st.title("🔄 Conciliação Bancária")
-st.caption("Cruzamento entre movimentos bancários, contas a pagar e contas a receber.")
+hero(
+    "Conciliacao Bancaria",
+    "Relacione automaticamente movimentacoes bancarias com contas a receber, contas a pagar e baixas financeiras.",
+    icone="GOIA"
+)
 
 
 def carregar_movimentos():
