@@ -97,28 +97,41 @@ def carregar_notas_cliente(cliente_id):
 
     query = """
         SELECT
-            d.numero_nfe,
-            d.serie_nfe,
-            d.data_emissao,
-            d.valor,
-            d.status_processamento
-        FROM documentos d
-        INNER JOIN clientes c
-            ON c.empresa_id = d.empresa_id
-           AND c.id = ?
-        WHERE d.empresa_id = ?
-          AND d.direcao = 'Nota Fiscal de Venda'
+            numero_nfe,
+            serie_nfe,
+            data_emissao,
+            valor,
+            status_processamento
+        FROM documentos
+        WHERE empresa_id = ?
+          AND direcao = 'Nota Fiscal de Venda'
           AND (
-                IFNULL(d.cnpj_destinatario, '') = IFNULL(c.cnpj_cpf, '')
-                OR IFNULL(d.nome_destinatario, '') = IFNULL(c.nome, '')
+              cnpj_destinatario = (
+                  SELECT cnpj_cpf
+                  FROM clientes
+                  WHERE id = ?
+                    AND empresa_id = ?
+              )
+              OR nome_destinatario = (
+                  SELECT nome
+                  FROM clientes
+                  WHERE id = ?
+                    AND empresa_id = ?
+              )
           )
-        ORDER BY d.data_emissao DESC
+        ORDER BY data_emissao DESC
     """
 
     df = pd.read_sql_query(
         query,
         conn,
-        params=(cliente_id, EMPRESA_ID_ATIVA)
+        params=(
+            EMPRESA_ID_ATIVA,
+            cliente_id,
+            EMPRESA_ID_ATIVA,
+            cliente_id,
+            EMPRESA_ID_ATIVA
+        )
     )
 
     conn.close()
@@ -151,7 +164,7 @@ clientes = carregar_clientes()
 
 st.subheader("Clientes cadastrados")
 
-busca = st.text_input("Buscar cliente por nome ou CPF/CNPJ")
+busca = st.text_input("Buscar cliente por nome ou CNPJ/CPF")
 
 if busca and not clientes.empty:
     clientes = clientes[
@@ -186,11 +199,7 @@ st.divider()
 st.subheader("Histórico financeiro do cliente")
 
 clientes["nome_exibicao"] = clientes.apply(
-    lambda r: (
-        f"{r['nome']} | {r['cnpj_cpf']}"
-        if pd.notna(r["cnpj_cpf"]) and str(r["cnpj_cpf"]).strip()
-        else str(r["nome"])
-    ),
+    lambda r: f"{r['nome']} | {r['cnpj_cpf']}" if pd.notna(r["cnpj_cpf"]) and str(r["cnpj_cpf"]).strip() else str(r["nome"]),
     axis=1
 )
 
@@ -199,7 +208,7 @@ cliente_opcao = st.selectbox(
     clientes["nome_exibicao"].tolist()
 )
 
-cliente_id = int(clientes.loc[clientes["nome_exibicao"] == cliente_opcao, "id"].iloc[0])
+cliente_id = int(clientes[clientes["nome_exibicao"] == cliente_opcao]["id"].iloc[0])
 
 notas = carregar_notas_cliente(cliente_id)
 receber = carregar_receber_cliente(cliente_id)
