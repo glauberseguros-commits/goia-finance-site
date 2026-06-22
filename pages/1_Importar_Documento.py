@@ -758,6 +758,80 @@ def obter_ou_criar_produto(cursor, descricao, custo=0, preco_venda=0):
     return cursor.lastrowid
 
 
+
+def criar_evidencia_documental(cursor, processo_id, documento_id, analise, conta_receber_id=None, conta_pagar_id=None):
+    tipo = analise.get("tipo_detectado") or "Documento"
+    numero = analise.get("numero_nfe") or ""
+    serie = analise.get("serie_nfe") or ""
+    valor = float(analise.get("valor") or 0)
+    data_ref = analise.get("data_emissao") or analise.get("data_vencimento")
+    origem = "Importação documental"
+
+    descricao = tipo
+
+    if numero:
+        descricao = f"{tipo} {numero}"
+        if serie:
+            descricao += f" Série {serie}"
+
+    cursor.execute("""
+        INSERT INTO evidencias (
+            empresa_id,
+            processo_id,
+            documento_id,
+            conta_receber_id,
+            conta_pagar_id,
+            tipo_evidencia,
+            descricao,
+            origem,
+            valor,
+            data_referencia,
+            status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        EMPRESA_ID_ATIVA,
+        processo_id,
+        documento_id,
+        conta_receber_id,
+        conta_pagar_id,
+        tipo,
+        descricao,
+        origem,
+        valor,
+        data_ref,
+        "Ativa"
+    ))
+
+    evidencia_id = cursor.lastrowid
+
+    cursor.execute("""
+        INSERT INTO processo_evidencias (
+            empresa_id,
+            processo_id,
+            documento_id,
+            tipo_evidencia,
+            descricao,
+            valor,
+            data_evidencia,
+            origem,
+            status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        EMPRESA_ID_ATIVA,
+        processo_id,
+        documento_id,
+        tipo,
+        descricao,
+        valor,
+        data_ref,
+        origem,
+        "Validada"
+    ))
+
+    return evidencia_id
+
 def criar_processo_documental(cursor, documento_id, analise):
     direcao = analise["direcao_sugerida"]
 
@@ -912,6 +986,8 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
     ))
 
     documento_id = cur.lastrowid
+    conta_receber_id = None
+    conta_pagar_id = None
     acoes = ["Documento salvo."]
 
     descricao = extrair_descricao_produto_nfe(texto)
@@ -950,6 +1026,8 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
                 analise.get("data_emissao"), analise.get("data_vencimento"), "Pendente", EMPRESA_ID_ATIVA
             ))
 
+            conta_receber_id = cur.lastrowid
+
             acoes.append("Venda e conta a receber criadas.")
 
     elif direcao in ["Nota Fiscal de Compra", "Boleto / Despesa"]:
@@ -986,6 +1064,8 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
                 analise.get("data_emissao"), analise.get("data_vencimento"), "Pendente", EMPRESA_ID_ATIVA
             ))
 
+            conta_pagar_id = cur.lastrowid
+
             acoes.append("Compra e conta a pagar criadas.")
 
     elif direcao == "Nota de Empenho":
@@ -994,7 +1074,17 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
             acoes.append("Cliente criado/identificado pela nota de empenho.")
 
     processo_id = criar_processo_documental(cur, documento_id, analise)
-    acoes.append("Processo documental e pendências criados.")
+
+    criar_evidencia_documental(
+        cur,
+        processo_id,
+        documento_id,
+        analise,
+        conta_receber_id=conta_receber_id,
+        conta_pagar_id=conta_pagar_id
+    )
+
+    acoes.append("Processo documental, evidência e pendências criados.")
 
     conn.commit()
     conn.close()
