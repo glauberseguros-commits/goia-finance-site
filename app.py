@@ -427,6 +427,8 @@ st.sidebar.page_link("pages/9_Clientes.py", label="Clientes", icon="👥")
 st.sidebar.page_link("pages/10_Fornecedores.py", label="Fornecedores", icon="🏭")
 st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", icon="💰")
 st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
+st.sidebar.page_link("pages/8_Movimentos_Bancarios.py", label="Movimentos Bancários", icon="🏦")
+st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="⚖️")
 
 st.title("💰 GOIA Finance Platform")
 st.caption(f"Empresa ativa: {st.session_state.get('empresa_nome')}")
