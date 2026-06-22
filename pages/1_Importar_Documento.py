@@ -448,122 +448,81 @@ def extrair_cadastro_do_bloco(bloco):
     }
 
 def extrair_partes_nfe(texto):
-    emitente_bloco = extrair_bloco_emitente_nfe(texto)
-    destinatario_bloco = extrair_bloco_destinatario_nfe(texto)
-
-    emitente = extrair_cadastro_do_bloco(emitente_bloco)
-    destinatario = extrair_cadastro_do_bloco(destinatario_bloco)
-
-    return {
-        "emitente_doc": emitente["doc"],
-        "emitente_nome": emitente["nome"],
-        "emitente_email": emitente["email"],
-        "emitente_cidade": emitente["cidade"],
-        "emitente_uf": emitente["uf"],
-        "destinatario_doc": destinatario["doc"],
-        "destinatario_nome": destinatario["nome"],
-        "destinatario_email": destinatario["email"],
-        "destinatario_cidade": destinatario["cidade"],
-        "destinatario_uf": destinatario["uf"],
-        "emitente_bloco": emitente_bloco,
-        "destinatario_bloco": destinatario_bloco,
-    }
-
-
-def extrair_entidades_documento(texto):
-    texto = texto or ""
-    linhas = [x.strip() for x in texto.splitlines() if x.strip()]
-
     documentos = encontrar_documentos(texto)
+    t = (texto or "").upper()
 
-    emails = re.findall(
-        r"[\w\.-]+@[\w\.-]+\.\w+",
-        texto,
-        flags=re.I
-    )
-    emails = list(dict.fromkeys([e.strip().lower() for e in emails]))
+    emitente_doc = ""
+    emitente_nome = ""
+    destinatario_doc = ""
+    destinatario_nome = ""
 
-    telefones_raw = re.findall(
-        r"(?:\(?\d{2}\)?\s*)?(?:9\s*)?\d{4}[-\s]?\d{4}",
-        texto
-    )
+    chave = extrair_chave_acesso_nfe(texto)
 
-    telefones = []
-    for tel in telefones_raw:
-        nums = re.sub(r"\D", "", tel)
-        if 8 <= len(nums) <= 11:
-            telefones.append(nums)
+    # Na NF-e, o CNPJ do emitente fica nas posições 7 a 20 da chave de acesso.
+    # Exemplo:
+    # 53 2511 28860122000177 55 001 000000032 ...
+    if chave and len(chave) == 44:
+        cnpj_emitente_chave = normalizar_documento(chave[6:20])
 
-    telefones = list(dict.fromkeys(telefones))
+        if cnpj_emitente_chave:
+            emitente_doc = cnpj_emitente_chave
 
-    nomes = []
+            if somente_numeros(emitente_doc) == somente_numeros(DOC_EMPRESA_LOGADA):
+                emitente_nome = NOME_EMPRESA_LOGADA
+            else:
+                emitente_nome = identificar_nome_por_documento(texto, emitente_doc)
 
-    padroes_nome = [
-        r"NOME EMPRESARIAL\s+(.+)",
-        r"NOME / RAZÃO SOCIAL\s+(.+)",
-        r"NOME / RAZAO SOCIAL\s+(.+)",
-        r"RAZÃO SOCIAL\s+(.+)",
-        r"RAZAO SOCIAL\s+(.+)",
-        r"NOME FANTASIA\s+(.+)",
-        r"FANTASIA\s+(.+)",
-    ]
+    # Fallback: se não conseguiu pela chave, usa documentos encontrados no texto.
+    if not emitente_doc:
+        for doc in documentos:
+            if somente_numeros(doc) == somente_numeros(DOC_EMPRESA_LOGADA):
+                emitente_doc = DOC_EMPRESA_LOGADA
+                emitente_nome = NOME_EMPRESA_LOGADA
+                break
 
-    for padrao in padroes_nome:
-        for m in re.finditer(padrao, texto, flags=re.I):
-            nome = " ".join((m.group(1) or "").split())
-            if nome:
-                nomes.append(nome[:140])
+    # Destinatário: primeiro documento válido diferente do emitente e da empresa logada.
+    candidatos_destinatario = []
 
-    palavras_ruido = [
-        "DANFE", "DOCUMENTO AUXILIAR", "CHAVE DE ACESSO",
-        "PROTOCOLO", "CONSULTA", "AUTENTICIDADE",
-        "NATUREZA DA OPERAÇÃO", "NATUREZA DA OPERACAO",
-        "CNPJ", "CPF", "INSCRIÇÃO", "INSCRICAO",
-        "ENDEREÇO", "ENDERECO", "BAIRRO", "CEP",
-        "MUNICÍPIO", "MUNICIPIO", "UF", "FONE", "FAX",
-        "DATA", "HORA", "VALOR", "TOTAL", "PRODUTO",
-        "CÁLCULO", "CALCULO", "IMPOSTO", "TRANSPORTADOR"
-    ]
+    for doc in documentos:
+        doc_num = somente_numeros(doc)
 
-    for i, linha in enumerate(linhas):
-        up = linha.upper()
-
-        if any(r in up for r in palavras_ruido):
+        if emitente_doc and doc_num == somente_numeros(emitente_doc):
             continue
 
-        if re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", linha):
-            continue
+        candidatos_destinatario.append(doc)
 
-        if re.search(r"\d{3}\.?\d{3}\.?\d{3}-?\d{2}", linha):
-            continue
+    if candidatos_destinatario:
+        # Se a empresa logada aparecer entre os candidatos, ela é destinatária.
+        for doc in candidatos_destinatario:
+            if somente_numeros(doc) == somente_numeros(DOC_EMPRESA_LOGADA):
+                destinatario_doc = DOC_EMPRESA_LOGADA
+                destinatario_nome = NOME_EMPRESA_LOGADA
+                break
 
-        if len(re.sub(r"\D", "", linha)) >= 8:
-            continue
+        # Caso contrário, pega o primeiro externo como contraparte.
+        if not destinatario_doc:
+            destinatario_doc = candidatos_destinatario[0]
+            destinatario_nome = identificar_nome_por_documento(texto, destinatario_doc)
 
-        if len(linha) >= 5 and any(c.isalpha() for c in linha):
-            nomes.append(" ".join(linha.split())[:140])
+    # Heurísticas de nome úteis para órgãos/clientes conhecidos.
+    if "COMANDO DA MARINHA" in t:
+        destinatario_nome = "COMANDO DA MARINHA"
 
-    nomes = list(dict.fromkeys(nomes))
+    if "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO" in t or "ADMINISTRACAO REGIONAL DE SOBRADINHO" in t:
+        destinatario_nome = "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO"
 
-    cidades_ufs = []
-    ufs = "AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO"
+    if "EVENTOS LTDA" in t and not destinatario_nome and destinatario_doc:
+        destinatario_nome = "EVENTOS LTDA"
 
-    for linha in linhas:
-        m = re.search(rf"\b([A-ZÁÉÍÓÚÂÊÔÃÕÇ\s]+)\s+({ufs})\b", linha.upper())
-        if m:
-            cidade = " ".join(m.group(1).split()).title()
-            uf = m.group(2)
-            cidades_ufs.append({"cidade": cidade, "uf": uf})
+    if "PONTO CERTO" in t and not emitente_nome:
+        emitente_nome = "PONTO CERTO COMERCIO DE FERRAGENS LTDA"
 
     return {
-        "documentos": documentos,
-        "emails": emails,
-        "telefones": telefones,
-        "nomes_possiveis": nomes[:10],
-        "cidades_ufs": cidades_ufs[:10],
+        "emitente_doc": emitente_doc,
+        "emitente_nome": emitente_nome,
+        "destinatario_doc": destinatario_doc,
+        "destinatario_nome": destinatario_nome,
     }
-
-
 
 def analisar_documento(texto):
     tipo = classificar_tipo_documento(texto)
