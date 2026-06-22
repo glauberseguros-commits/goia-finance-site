@@ -6,6 +6,7 @@ from io import BytesIO
 import pandas as pd
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
+from utils.premium import aplicar_premium_goia, hero
 from utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido, formatar_telefone
 
 DB_PATH = Path("bd/gofinance.db")
@@ -17,6 +18,7 @@ st.set_page_config(
 )
 
 aplicar_estilo_premium()
+aplicar_premium_goia()
 
 
 st.markdown("""
@@ -430,8 +432,7 @@ st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="
 st.sidebar.page_link("pages/8_Movimentos_Bancarios.py", label="Movimentos Bancários", icon="🏦")
 st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="⚖️")
 
-st.title("💰 GOIA Finance Platform")
-st.caption(f"Empresa ativa: {st.session_state.get('empresa_nome')}")
+hero("Dashboard Executivo", f"Empresa ativa: {st.session_state.get('empresa_nome')}", icone="💰")
 
 c1, c2, c3 = st.columns(3)
 c1.metric("Recebimentos", moeda(recebimentos))
