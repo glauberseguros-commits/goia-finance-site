@@ -885,23 +885,119 @@ def analisar_documento(texto):
         "destinatario_nome": destinatario_nome,
     }
 
+
+def digitos_iguais(valor):
+    valor = str(valor or "")
+    return bool(valor) and valor == valor[0] * len(valor)
+
+
+def cpf_valido(cpf):
+    cpf = normalizar_documento(cpf)
+    if len(cpf) != 11 or digitos_iguais(cpf):
+        return False
+
+    soma = sum(int(cpf[i]) * (10 - i) for i in range(9))
+    d1 = (soma * 10) % 11
+    d1 = 0 if d1 == 10 else d1
+
+    soma = sum(int(cpf[i]) * (11 - i) for i in range(10))
+    d2 = (soma * 10) % 11
+    d2 = 0 if d2 == 10 else d2
+
+    return cpf[-2:] == f"{d1}{d2}"
+
+
+def cnpj_valido(cnpj):
+    cnpj = normalizar_documento(cnpj)
+    if len(cnpj) != 14 or digitos_iguais(cnpj):
+        return False
+
+    pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    pesos2 = [6] + pesos1
+
+    soma = sum(int(cnpj[i]) * pesos1[i] for i in range(12))
+    resto = soma % 11
+    d1 = 0 if resto < 2 else 11 - resto
+
+    soma = sum(int(cnpj[i]) * pesos2[i] for i in range(13))
+    resto = soma % 11
+    d2 = 0 if resto < 2 else 11 - resto
+
+    return cnpj[-2:] == f"{d1}{d2}"
+
+
+def documento_entidade_valido(documento):
+    documento = normalizar_documento(documento)
+    return cpf_valido(documento) or cnpj_valido(documento)
+
+
+def nome_entidade_valido(nome):
+    nome_original = (nome or "").strip()
+    nome_upper = nome_original.upper()
+
+    if len(nome_original) < 4:
+        return False
+
+    termos_invalidos = [
+        "NÃO IDENTIFICADO",
+        "NAO IDENTIFICADO",
+        "CLIENTE NÃO IDENTIFICADO",
+        "CLIENTE NAO IDENTIFICADO",
+        "FORNECEDOR NÃO IDENTIFICADO",
+        "FORNECEDOR NAO IDENTIFICADO",
+        "ÓRGÃO PÚBLICO",
+        "ORGAO PUBLICO",
+        "VALIDADE:",
+        "ENDEREÇO:",
+        "ENDERECO:",
+        "CEP:",
+        "HTTP://",
+        "HTTPS://",
+        "WWW.",
+        "PORTAL",
+        "SEFAZ",
+        "FAZENDA",
+        "RECEITA FEDERAL",
+        "CERTIDÃO",
+        "CERTIDAO",
+        "COMPROVANTE",
+        "AUTENTICIDADE",
+        "PROTOCOLO",
+    ]
+
+    if any(t in nome_upper for t in termos_invalidos):
+        return False
+
+    # Evita cadastrar frases longas ou trechos de documento como entidade.
+    if len(nome_original) > 120:
+        return False
+
+    # Evita nomes compostos majoritariamente por números/símbolos.
+    letras = sum(1 for c in nome_original if c.isalpha())
+    if letras < 4:
+        return False
+
+    return True
+
+
+
 def obter_ou_criar_cliente(cursor, documento, nome):
     documento = normalizar_documento(documento)
     nome = (nome or "").strip()
 
-    if not documento and not nome:
+    # Regra de segurança:
+    # cliente automático só pode ser criado com CPF/CNPJ válido e nome confiável.
+    # Caso contrário, o documento deve virar pendência de validação, não cadastro sujo.
+    if not documento_entidade_valido(documento):
         return None
 
-    if documento:
-        cursor.execute("""
-            SELECT id FROM clientes
-            WHERE empresa_id = ? AND cnpj_cpf = ?
-        """, (EMPRESA_ID_ATIVA, documento))
-    else:
-        cursor.execute("""
-            SELECT id FROM clientes
-            WHERE empresa_id = ? AND nome = ?
-        """, (EMPRESA_ID_ATIVA, nome))
+    if not nome_entidade_valido(nome):
+        return None
+
+    cursor.execute("""
+        SELECT id FROM clientes
+        WHERE empresa_id = ? AND cnpj_cpf = ?
+    """, (EMPRESA_ID_ATIVA, documento))
 
     row = cursor.fetchone()
     if row:
@@ -910,7 +1006,7 @@ def obter_ou_criar_cliente(cursor, documento, nome):
     cursor.execute("""
         INSERT INTO clientes (empresa_id, nome, cnpj_cpf, origem_cadastro)
         VALUES (?, ?, ?, ?)
-    """, (EMPRESA_ID_ATIVA, nome or "Cliente não identificado", documento, "Importação documental"))
+    """, (EMPRESA_ID_ATIVA, nome, documento, "Importação documental"))
 
     return cursor.lastrowid
 
@@ -919,19 +1015,18 @@ def obter_ou_criar_fornecedor(cursor, documento, nome):
     documento = normalizar_documento(documento)
     nome = (nome or "").strip()
 
-    if not documento and not nome:
+    # Regra de segurança:
+    # fornecedor automático só pode ser criado com CPF/CNPJ válido e nome confiável.
+    if not documento_entidade_valido(documento):
         return None
 
-    if documento:
-        cursor.execute("""
-            SELECT id FROM fornecedores
-            WHERE empresa_id = ? AND cnpj = ?
-        """, (EMPRESA_ID_ATIVA, documento))
-    else:
-        cursor.execute("""
-            SELECT id FROM fornecedores
-            WHERE empresa_id = ? AND nome = ?
-        """, (EMPRESA_ID_ATIVA, nome))
+    if not nome_entidade_valido(nome):
+        return None
+
+    cursor.execute("""
+        SELECT id FROM fornecedores
+        WHERE empresa_id = ? AND cnpj = ?
+    """, (EMPRESA_ID_ATIVA, documento))
 
     row = cursor.fetchone()
     if row:
@@ -944,7 +1039,7 @@ def obter_ou_criar_fornecedor(cursor, documento, nome):
         VALUES (?, ?, ?, ?, ?, ?)
     """, (
         EMPRESA_ID_ATIVA,
-        nome or "Fornecedor não identificado",
+        nome,
         documento,
         "A classificar",
         "Pagar",
