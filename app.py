@@ -249,15 +249,36 @@ def garantir_enriquecimento_cadastral():
 
 
 
+
 def criar_pendencia_automatica(
     empresa_id,
     processo_id,
     descricao,
     tipo_evidencia="Evidencia documental",
-    prioridade="MEDIA"
+    documento_id=None,
+    proxima_acao=None
 ):
     conn = conectar()
     cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id
+        FROM processo_pendencias
+        WHERE empresa_id = ?
+          AND processo_id = ?
+          AND descricao = ?
+          AND COALESCE(status, 'Pendente') = 'Pendente'
+    """, (
+        empresa_id,
+        processo_id,
+        descricao
+    ))
+
+    existente = cur.fetchone()
+
+    if existente:
+        conn.close()
+        return existente[0]
 
     cur.execute("""
         INSERT INTO processo_pendencias (
@@ -265,18 +286,26 @@ def criar_pendencia_automatica(
             processo_id,
             descricao,
             tipo_evidencia,
+            documento_id,
+            proxima_acao,
             status
         )
-        VALUES (?, ?, ?, ?, 'Pendente')
+        VALUES (?, ?, ?, ?, ?, ?, 'Pendente')
     """, (
         empresa_id,
         processo_id,
         descricao,
-        tipo_evidencia
+        tipo_evidencia,
+        documento_id,
+        proxima_acao
     ))
+
+    pendencia_id = cur.lastrowid
 
     conn.commit()
     conn.close()
+
+    return pendencia_id
 
 
 def tela_login():
