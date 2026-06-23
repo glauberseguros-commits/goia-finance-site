@@ -1601,6 +1601,43 @@ if not arquivos:
 
 st.info(f"{len(arquivos)} documento(s) anexado(s). Todos serão analisados e processados.")
 
+
+def diagnostico_banco_importador():
+    conn = conectar()
+    cur = conn.cursor()
+
+    tabelas = [
+        "documentos",
+        "fornecedores",
+        "clientes",
+        "compras",
+        "contas_pagar",
+        "vendas",
+        "contas_receber",
+        "processos_documentais",
+        "processo_pendencias",
+        "evidencias",
+    ]
+
+    resultado = {
+        "_db_path": str(DB_PATH),
+        "_empresa_id": EMPRESA_ID_ATIVA,
+    }
+
+    for tabela in tabelas:
+        try:
+            cur.execute(
+                f"SELECT COUNT(*) FROM {tabela} WHERE empresa_id = ?",
+                (EMPRESA_ID_ATIVA,)
+            )
+            resultado[tabela] = cur.fetchone()[0]
+        except Exception as e:
+            resultado[tabela] = f"ERRO: {e}"
+
+    conn.close()
+    return resultado
+
+
 if st.button("Processar todos os documentos", type="primary"):
     for arquivo in arquivos:
         with st.container(border=True):
@@ -1697,6 +1734,9 @@ if st.button("Processar todos os documentos", type="primary"):
 
                 if resultado.get("processo_id"):
                     st.info(f"Processo documental criado: {resultado['processo_id']}")
+
+                with st.expander("Diagnóstico do banco após salvar"):
+                    st.json(diagnostico_banco_importador())
 
             except Exception as e:
                 st.error(f"Erro ao processar documento: {e}")
