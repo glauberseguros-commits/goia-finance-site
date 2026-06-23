@@ -1,3 +1,4 @@
+from utils.db import caminho_banco, conectar_banco
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero
@@ -6,7 +7,7 @@ import sqlite3
 from utils.formatadores import formatar_moeda, formatar_data
 from utils.auth import empresa_logada, exigir_login
 
-DB_PATH = "bd/gofinance.db"
+DB_PATH = caminho_banco()
 
 exigir_login()
 EMPRESA_ID_ATIVA = empresa_logada()
@@ -54,7 +55,7 @@ hero(
 
 
 def carregar_movimentos():
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     df = pd.read_sql_query("""
         SELECT
@@ -76,7 +77,7 @@ def carregar_movimentos():
 
 
 def carregar_receber_pendentes():
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     df = pd.read_sql_query("""
         SELECT
@@ -101,7 +102,7 @@ def carregar_receber_pendentes():
 
 
 def carregar_pagar_pendentes():
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     df = pd.read_sql_query("""
         SELECT
@@ -279,7 +280,7 @@ def atualizar_pendencia_processo(cursor, processo_id, tipo_conta, movimento_id):
 
 
 def conciliar(movimento_id, tipo_conta, conta_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
     cur = conn.cursor()
 
     try:

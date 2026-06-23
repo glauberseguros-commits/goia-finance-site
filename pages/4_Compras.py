@@ -1,3 +1,4 @@
+from utils.db import caminho_banco, conectar_banco
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
 import pandas as pd
@@ -5,7 +6,7 @@ import sqlite3
 from utils.formatadores import formatar_data
 from utils.auth import empresa_logada, exigir_login
 
-DB_PATH = "bd/gofinance.db"
+DB_PATH = caminho_banco()
 
 exigir_login()
 EMPRESA_ID_ATIVA = empresa_logada()
@@ -57,7 +58,7 @@ def moeda(valor):
 
 
 def carregar_compras():
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     query = """
         SELECT
@@ -90,7 +91,7 @@ def carregar_compras():
 
 
 def carregar_itens_compra(compra_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     query = """
         SELECT

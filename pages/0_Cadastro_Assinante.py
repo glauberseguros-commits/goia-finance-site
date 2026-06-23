@@ -1,3 +1,4 @@
+from utils.db import caminho_banco, conectar_banco
 import hashlib
 import re
 import sqlite3
@@ -7,7 +8,7 @@ import streamlit as st
 from utils.ui import aplicar_estilo_premium
 from utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido
 
-DB_PATH = Path("bd/gofinance.db")
+DB_PATH = caminho_banco()
 
 
 st.set_page_config(
@@ -20,7 +21,7 @@ aplicar_estilo_premium()
 
 
 def conectar():
-    return sqlite3.connect(DB_PATH)
+    return conectar_banco()
 
 
 def hash_senha(senha):

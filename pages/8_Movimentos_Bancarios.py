@@ -1,3 +1,4 @@
+from utils.db import caminho_banco, conectar_banco
 
 import sqlite3
 import pandas as pd
@@ -6,7 +7,7 @@ import streamlit as st
 from utils.ui import aplicar_estilo_premium, moeda
 from utils.premium import aplicar_premium_goia, hero
 
-DB = "bd/gofinance.db"
+DB = caminho_banco()
 EMPRESA_ID_ATIVA = 2
 
 st.set_page_config(
@@ -30,7 +31,7 @@ with st.sidebar:
     st.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="⚖️")
 
 def conectar():
-    return sqlite3.connect(DB)
+    return conectar_banco()
 
 def carregar_movimentos():
     conn = conectar()

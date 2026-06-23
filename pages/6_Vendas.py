@@ -1,3 +1,4 @@
+from utils.db import caminho_banco, conectar_banco
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
 import pandas as pd
@@ -5,7 +6,7 @@ import sqlite3
 from datetime import date
 from utils.auth import empresa_logada, exigir_login
 
-DB_PATH = "bd/gofinance.db"
+DB_PATH = caminho_banco()
 
 exigir_login()
 EMPRESA_ID_ATIVA = empresa_logada()
@@ -67,7 +68,7 @@ def numero_br(valor):
 
 
 def carregar_produtos():
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     query = """
         SELECT
@@ -155,7 +156,7 @@ def obter_ou_criar_cliente(cursor, nome, cnpj_cpf=""):
 
 
 def registrar_venda(cliente_nome, cliente_cnpj, produto, quantidade, valor_unitario, data_venda, vencimento):
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
     cursor = conn.cursor()
 
     try:

@@ -1,3 +1,4 @@
+from utils.db import caminho_banco, conectar_banco
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero
@@ -8,7 +9,7 @@ from datetime import datetime
 from utils.formatadores import formatar_data
 from utils.auth import empresa_logada, exigir_login
 
-DB_PATH = "bd/gofinance.db"
+DB_PATH = caminho_banco()
 
 exigir_login()
 EMPRESA_ID_ATIVA = empresa_logada()
@@ -62,7 +63,7 @@ def moeda(valor):
 
 
 def carregar_contas_pagar():
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     query = """
         SELECT

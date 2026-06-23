@@ -1,3 +1,4 @@
+from utils.db import caminho_banco, conectar_banco
 import re
 import xml.etree.ElementTree as ET
 import sqlite3
@@ -12,7 +13,7 @@ from utils.auth import empresa_logada, exigir_login
 from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero
 
-DB_PATH = "bd/gofinance.db"
+DB_PATH = caminho_banco()
 
 exigir_login()
 EMPRESA_ID_ATIVA = empresa_logada()
@@ -38,7 +39,7 @@ menu_goia()
 
 
 def conectar():
-    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn = conectar_banco(timeout=30)
     conn.execute("PRAGMA busy_timeout = 30000")
     try:
         conn.execute("PRAGMA journal_mode = WAL")

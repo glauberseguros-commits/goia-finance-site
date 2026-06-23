@@ -1,3 +1,4 @@
+from utils.db import caminho_banco, conectar_banco
 import streamlit as st
 from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero
@@ -6,7 +7,7 @@ import sqlite3
 from utils.formatadores import formatar_moeda, formatar_data
 from utils.auth import empresa_logada, exigir_login
 
-DB_PATH = "bd/gofinance.db"
+DB_PATH = caminho_banco()
 
 exigir_login()
 EMPRESA_ID_ATIVA = empresa_logada()
@@ -54,7 +55,7 @@ hero(
 
 
 def carregar_processos():
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     query = """
         SELECT
@@ -97,7 +98,7 @@ def carregar_processos():
 
 
 def carregar_documentos(processo_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     query = """
         SELECT
@@ -128,7 +129,7 @@ def carregar_documentos(processo_id):
 
 
 def carregar_pendencias(processo_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     query = """
         SELECT
@@ -153,7 +154,7 @@ def carregar_pendencias(processo_id):
 
 
 def carregar_evidencias(processo_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
 
     query = """
         SELECT
@@ -184,7 +185,7 @@ def carregar_evidencias(processo_id):
 
 
 def concluir_pendencia(pendencia_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
     cur = conn.cursor()
 
     cur.execute("""
@@ -199,7 +200,7 @@ def concluir_pendencia(pendencia_id):
 
 
 def atualizar_status_processo(processo_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
     cur = conn.cursor()
 
     cur.execute("""

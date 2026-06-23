@@ -1,3 +1,4 @@
+from utils.db import caminho_banco, conectar_banco
 import sqlite3
 
 import pandas as pd
@@ -7,7 +8,7 @@ from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero
 
 
-DB_PATH = "bd/gofinance.db"
+DB_PATH = caminho_banco()
 
 exigir_login()
 EMPRESA_ID_ATIVA = empresa_logada()
@@ -55,7 +56,7 @@ hero(
 
 
 def conectar():
-    return sqlite3.connect(DB_PATH)
+    return conectar_banco()
 
 
 def carregar_pendencias():
