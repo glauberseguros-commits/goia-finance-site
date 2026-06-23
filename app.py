@@ -10,6 +10,7 @@ from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero, kpi_card, section_title
 from utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido, formatar_telefone
 from utils.db import caminho_banco, conectar_banco
+from utils.schema import inicializar_schema_goia
 
 DB_PATH = caminho_banco()
 
@@ -903,6 +904,7 @@ def tela_login():
     st.stop()
 
 preparar_banco()
+inicializar_schema_goia()
 garantir_enriquecimento_cadastral()
 garantir_motor_encerramento()
 garantir_schema_documental()
