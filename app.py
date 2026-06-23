@@ -308,6 +308,34 @@ def criar_pendencia_automatica(
     return pendencia_id
 
 
+
+def garantir_motor_encerramento():
+    conn = conectar()
+    cur = conn.cursor()
+
+    garantias = {
+        "contas_pagar": [
+            ("processo_id", "INTEGER")
+        ],
+        "processo_pendencias": [
+            ("resolvido_em", "TEXT"),
+            ("resolvido_por", "TEXT"),
+            ("evidencia_resolucao_id", "INTEGER")
+        ]
+    }
+
+    for tabela, campos in garantias.items():
+        cur.execute(f"PRAGMA table_info({tabela})")
+        existentes = [c[1] for c in cur.fetchall()]
+
+        for campo, tipo in campos:
+            if campo not in existentes:
+                cur.execute(f"ALTER TABLE {tabela} ADD COLUMN {campo} {tipo}")
+
+    conn.commit()
+    conn.close()
+
+
 def tela_login():
     st.markdown("""
     <style>
@@ -468,6 +496,7 @@ def tela_login():
 
 preparar_banco()
 garantir_enriquecimento_cadastral()
+garantir_motor_encerramento()
 
 if not st.session_state.get("logado") or not st.session_state.get("empresa_id"):
     tela_login()
