@@ -504,6 +504,16 @@ def garantir_schema_documental():
             valor_total REAL DEFAULT 0,
             valor REAL DEFAULT 0,
             status TEXT DEFAULT 'Importado',
+            status_processamento TEXT DEFAULT 'Processado',
+            erro_processamento TEXT,
+            processado_em TEXT,
+            hash_arquivo TEXT,
+            caminho_arquivo TEXT,
+            extensao TEXT,
+            tamanho_bytes INTEGER,
+            observacao TEXT,
+            diagnostico_tecnico TEXT,
+            dados_extraidos_json TEXT,
             criado_em TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -586,6 +596,16 @@ def garantir_schema_documental():
             ("valor_total", "REAL DEFAULT 0"),
             ("valor", "REAL DEFAULT 0"),
             ("status", "TEXT DEFAULT 'Importado'"),
+            ("status_processamento", "TEXT DEFAULT 'Processado'"),
+            ("erro_processamento", "TEXT"),
+            ("processado_em", "TEXT"),
+            ("hash_arquivo", "TEXT"),
+            ("caminho_arquivo", "TEXT"),
+            ("extensao", "TEXT"),
+            ("tamanho_bytes", "INTEGER"),
+            ("observacao", "TEXT"),
+            ("diagnostico_tecnico", "TEXT"),
+            ("dados_extraidos_json", "TEXT"),
             ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
         ],
         "processos_documentais": [
