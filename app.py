@@ -8,8 +8,9 @@ import streamlit as st
 from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero, kpi_card, section_title
 from utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido, formatar_telefone
+from utils.db import caminho_banco, conectar_banco
 
-DB_PATH = Path("bd/gofinance.db")
+DB_PATH = caminho_banco()
 
 st.set_page_config(
     page_title="GOIA Finance Platform",
@@ -31,7 +32,7 @@ st.markdown("""
 
 
 def conectar():
-    return sqlite3.connect(DB_PATH)
+    return conectar_banco()
 
 def limpar_doc(v):
     return "".join(filter(str.isdigit, v or ""))
