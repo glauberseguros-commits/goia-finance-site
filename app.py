@@ -468,6 +468,174 @@ def garantir_motor_encerramento():
 
 
 
+def garantir_schema_documental():
+    """
+    Garante tabelas documentais mínimas no banco persistente.
+    Necessário no Render quando /data/gofinance.db existe, mas ainda não possui estrutura operacional.
+    """
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS documentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER,
+            processo_id INTEGER,
+            cliente_id INTEGER,
+            fornecedor_id INTEGER,
+            nome_arquivo TEXT,
+            tipo_documento TEXT,
+            classificacao TEXT,
+            origem TEXT,
+            conteudo_texto TEXT,
+            chave_acesso_nfe TEXT,
+            numero_nfe TEXT,
+            serie_nfe TEXT,
+            cnpj_emitente TEXT,
+            nome_emitente TEXT,
+            cnpj_destinatario TEXT,
+            nome_destinatario TEXT,
+            contraparte_nome TEXT,
+            contraparte_documento TEXT,
+            data_documento TEXT,
+            data_emissao TEXT,
+            data_vencimento TEXT,
+            valor_total REAL DEFAULT 0,
+            valor REAL DEFAULT 0,
+            status TEXT DEFAULT 'Importado',
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS processos_documentais (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER,
+            titulo TEXT,
+            descricao TEXT,
+            tipo_processo TEXT,
+            status TEXT DEFAULT 'Aberto',
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TEXT
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS processo_documentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER,
+            processo_id INTEGER,
+            documento_id INTEGER,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS evidencias (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER,
+            processo_id INTEGER,
+            documento_id INTEGER,
+            tipo_evidencia TEXT,
+            descricao TEXT,
+            valor TEXT,
+            status TEXT DEFAULT 'Ativa',
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS processo_evidencias (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER,
+            processo_id INTEGER,
+            documento_id INTEGER,
+            evidencia_id INTEGER,
+            tipo_evidencia TEXT,
+            descricao TEXT,
+            valor TEXT,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    garantias = {
+        "documentos": [
+            ("empresa_id", "INTEGER"),
+            ("processo_id", "INTEGER"),
+            ("cliente_id", "INTEGER"),
+            ("fornecedor_id", "INTEGER"),
+            ("nome_arquivo", "TEXT"),
+            ("tipo_documento", "TEXT"),
+            ("classificacao", "TEXT"),
+            ("origem", "TEXT"),
+            ("conteudo_texto", "TEXT"),
+            ("chave_acesso_nfe", "TEXT"),
+            ("numero_nfe", "TEXT"),
+            ("serie_nfe", "TEXT"),
+            ("cnpj_emitente", "TEXT"),
+            ("nome_emitente", "TEXT"),
+            ("cnpj_destinatario", "TEXT"),
+            ("nome_destinatario", "TEXT"),
+            ("contraparte_nome", "TEXT"),
+            ("contraparte_documento", "TEXT"),
+            ("data_documento", "TEXT"),
+            ("data_emissao", "TEXT"),
+            ("data_vencimento", "TEXT"),
+            ("valor_total", "REAL DEFAULT 0"),
+            ("valor", "REAL DEFAULT 0"),
+            ("status", "TEXT DEFAULT 'Importado'"),
+            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
+        ],
+        "processos_documentais": [
+            ("empresa_id", "INTEGER"),
+            ("titulo", "TEXT"),
+            ("descricao", "TEXT"),
+            ("tipo_processo", "TEXT"),
+            ("status", "TEXT DEFAULT 'Aberto'"),
+            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP"),
+            ("atualizado_em", "TEXT")
+        ],
+        "processo_documentos": [
+            ("empresa_id", "INTEGER"),
+            ("processo_id", "INTEGER"),
+            ("documento_id", "INTEGER"),
+            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
+        ],
+        "evidencias": [
+            ("empresa_id", "INTEGER"),
+            ("processo_id", "INTEGER"),
+            ("documento_id", "INTEGER"),
+            ("tipo_evidencia", "TEXT"),
+            ("descricao", "TEXT"),
+            ("valor", "TEXT"),
+            ("status", "TEXT DEFAULT 'Ativa'"),
+            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
+        ],
+        "processo_evidencias": [
+            ("empresa_id", "INTEGER"),
+            ("processo_id", "INTEGER"),
+            ("documento_id", "INTEGER"),
+            ("evidencia_id", "INTEGER"),
+            ("tipo_evidencia", "TEXT"),
+            ("descricao", "TEXT"),
+            ("valor", "TEXT"),
+            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
+        ]
+    }
+
+    for tabela, campos in garantias.items():
+        cur.execute(f"PRAGMA table_info({tabela})")
+        existentes = [c[1] for c in cur.fetchall()]
+
+        for campo, tipo in campos:
+            if campo not in existentes:
+                cur.execute(f"ALTER TABLE {tabela} ADD COLUMN {campo} {tipo}")
+
+    conn.commit()
+    conn.close()
+
+
+
 def garantir_empresa_bootstrap():
     """
     Cria ou atualiza a empresa GODS no banco persistente do Render usando senha via variável de ambiente.
@@ -715,6 +883,7 @@ def tela_login():
 preparar_banco()
 garantir_enriquecimento_cadastral()
 garantir_motor_encerramento()
+garantir_schema_documental()
 garantir_empresa_bootstrap()
 
 if not st.session_state.get("logado") or not st.session_state.get("empresa_id"):
