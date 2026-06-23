@@ -267,6 +267,7 @@ SCHEMA = {
         "tipo": "TEXT",
         "conciliado": "INTEGER DEFAULT 0",
         "origem": "TEXT",
+        "cnpj_origem": "TEXT",
         "nome_origem": "TEXT",
         "conta_receber_id": "INTEGER",
         "conta_pagar_id": "INTEGER",
