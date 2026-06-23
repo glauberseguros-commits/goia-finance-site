@@ -1,4 +1,5 @@
 import sqlite3
+import os
 import hashlib
 import re
 from pathlib import Path
@@ -467,6 +468,92 @@ def garantir_motor_encerramento():
 
 
 
+def garantir_empresa_bootstrap():
+    """
+    Cria ou atualiza a empresa GODS no banco persistente do Render usando senha via variável de ambiente.
+    Não deixa senha hardcoded no código.
+    """
+    senha = os.environ.get("GOIA_BOOTSTRAP_PASSWORD", "").strip()
+
+    if not senha:
+        return
+
+    cnpj = "28860122000177"
+    nome = "GODS - PRODUTOS, SERVICOS & EVENTOS LTDA"
+    email = os.environ.get("GOIA_BOOTSTRAP_EMAIL", "admin@gods.com.br").strip()
+    telefone = os.environ.get("GOIA_BOOTSTRAP_TELEFONE", "61999878710").strip()
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS empresas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            cnpj_cpf TEXT,
+            email TEXT,
+            telefone TEXT,
+            senha_hash TEXT,
+            plano TEXT DEFAULT 'Teste',
+            status_assinatura TEXT DEFAULT 'Ativa',
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cur.execute("PRAGMA table_info(empresas)")
+    existentes = [c[1] for c in cur.fetchall()]
+
+    campos = [
+        ("cnpj_cpf", "TEXT"),
+        ("email", "TEXT"),
+        ("telefone", "TEXT"),
+        ("senha_hash", "TEXT"),
+        ("plano", "TEXT DEFAULT 'Teste'"),
+        ("status_assinatura", "TEXT DEFAULT 'Ativa'"),
+        ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
+    ]
+
+    for campo, tipo in campos:
+        if campo not in existentes:
+            cur.execute(f"ALTER TABLE empresas ADD COLUMN {campo} {tipo}")
+
+    senha_hash = hash_senha(senha)
+
+    cur.execute("""
+        SELECT id
+        FROM empresas
+        WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+        LIMIT 1
+    """, (cnpj,))
+
+    row = cur.fetchone()
+
+    if row:
+        empresa_id = row[0]
+        cur.execute("""
+            UPDATE empresas
+            SET nome = ?,
+                cnpj_cpf = ?,
+                email = ?,
+                telefone = ?,
+                senha_hash = ?,
+                plano = COALESCE(plano, 'Teste'),
+                status_assinatura = 'Ativa'
+            WHERE id = ?
+        """, (nome, cnpj, email, telefone, senha_hash, empresa_id))
+    else:
+        cur.execute("""
+            INSERT INTO empresas (
+                nome, cnpj_cpf, email, telefone, senha_hash, plano, status_assinatura
+            )
+            VALUES (?, ?, ?, ?, ?, 'Teste', 'Ativa')
+        """, (nome, cnpj, email, telefone, senha_hash))
+
+    conn.commit()
+    conn.close()
+
+
+
 def tela_login():
     st.markdown("""
     <style>
@@ -628,6 +715,7 @@ def tela_login():
 preparar_banco()
 garantir_enriquecimento_cadastral()
 garantir_motor_encerramento()
+garantir_empresa_bootstrap()
 
 if not st.session_state.get("logado") or not st.session_state.get("empresa_id"):
     tela_login()
