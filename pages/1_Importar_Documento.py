@@ -211,20 +211,43 @@ def extrair_texto_pypdf(arquivo):
 
 
 def extrair_texto_ocr(arquivo):
-    arquivo.seek(0)
-    imagens = convert_from_bytes(arquivo.read(), dpi=300)
-    texto = ""
-    for imagem in imagens:
-        texto += pytesseract.image_to_string(imagem, lang="por+eng")
-        texto += "\n"
-    return texto.strip()
+    """
+    OCR é recurso auxiliar.
+
+    Em produção no Render Free, o binário do Tesseract pode não existir.
+    Nesse caso, a GOIA não deve quebrar o lote inteiro: deve seguir com
+    texto vazio/parcial e deixar o documento como pendente de revisão.
+    """
+    try:
+        arquivo.seek(0)
+        imagens = convert_from_bytes(arquivo.read(), dpi=300)
+
+        texto = ""
+        for imagem in imagens:
+            texto += pytesseract.image_to_string(imagem, lang="por+eng")
+            texto += "\n"
+
+        return texto.strip(), None
+
+    except Exception as e:
+        return "", f"OCR indisponível ou falhou no servidor: {e}"
 
 
 def extrair_texto_pdf(arquivo):
     texto = extrair_texto_pypdf(arquivo)
-    if len(texto) < 80:
-        texto = extrair_texto_ocr(arquivo)
-    return texto
+
+    if len(texto or "") >= 80:
+        return texto
+
+    texto_ocr, erro_ocr = extrair_texto_ocr(arquivo)
+
+    if texto_ocr:
+        return texto_ocr
+
+    if texto:
+        return texto + "\n\n[AVISO GOIA] " + (erro_ocr or "OCR indisponível.")
+
+    return "[AVISO GOIA] Documento sem texto extraível automaticamente. " + (erro_ocr or "OCR indisponível.")
 
 
 def classificar_tipo_documento(texto):
