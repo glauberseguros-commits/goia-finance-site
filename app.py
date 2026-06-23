@@ -383,14 +383,74 @@ def garantir_motor_encerramento():
     conn = conectar()
     cur = conn.cursor()
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS contas_pagar (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER,
+            fornecedor_id INTEGER,
+            processo_id INTEGER,
+            documento_id INTEGER,
+            descricao TEXT,
+            categoria TEXT,
+            valor REAL DEFAULT 0,
+            data_emissao TEXT,
+            data_vencimento TEXT,
+            data_baixa TEXT,
+            valor_baixado REAL DEFAULT 0,
+            forma_pagamento TEXT,
+            observacao_baixa TEXT,
+            status TEXT DEFAULT 'Pendente',
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS processo_pendencias (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER,
+            processo_id INTEGER,
+            documento_id INTEGER,
+            descricao TEXT,
+            tipo_evidencia TEXT,
+            proxima_acao TEXT,
+            status TEXT DEFAULT 'Pendente',
+            resolvido_em TEXT,
+            resolvido_por TEXT,
+            evidencia_resolucao_id INTEGER,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     garantias = {
         "contas_pagar": [
-            ("processo_id", "INTEGER")
+            ("empresa_id", "INTEGER"),
+            ("fornecedor_id", "INTEGER"),
+            ("processo_id", "INTEGER"),
+            ("documento_id", "INTEGER"),
+            ("descricao", "TEXT"),
+            ("categoria", "TEXT"),
+            ("valor", "REAL DEFAULT 0"),
+            ("data_emissao", "TEXT"),
+            ("data_vencimento", "TEXT"),
+            ("data_baixa", "TEXT"),
+            ("valor_baixado", "REAL DEFAULT 0"),
+            ("forma_pagamento", "TEXT"),
+            ("observacao_baixa", "TEXT"),
+            ("status", "TEXT DEFAULT 'Pendente'"),
+            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
         ],
         "processo_pendencias": [
+            ("empresa_id", "INTEGER"),
+            ("processo_id", "INTEGER"),
+            ("documento_id", "INTEGER"),
+            ("descricao", "TEXT"),
+            ("tipo_evidencia", "TEXT"),
+            ("proxima_acao", "TEXT"),
+            ("status", "TEXT DEFAULT 'Pendente'"),
             ("resolvido_em", "TEXT"),
             ("resolvido_por", "TEXT"),
-            ("evidencia_resolucao_id", "INTEGER")
+            ("evidencia_resolucao_id", "INTEGER"),
+            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
         ]
     }
 
@@ -404,6 +464,7 @@ def garantir_motor_encerramento():
 
     conn.commit()
     conn.close()
+
 
 
 def tela_login():
