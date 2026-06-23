@@ -226,16 +226,88 @@ def garantir_enriquecimento_cadastral():
     conn = conectar()
     cur = conn.cursor()
 
-    campos = [
-        ("nome_fantasia", "TEXT"),
-        ("cnae_principal", "TEXT"),
-        ("natureza_juridica", "TEXT"),
-        ("capital_social", "REAL"),
-        ("situacao_cadastral", "TEXT"),
-        ("origem_cadastro", "TEXT DEFAULT 'DOCUMENTO'")
-    ]
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS clientes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER,
+            nome TEXT,
+            cnpj_cpf TEXT,
+            email TEXT,
+            telefone TEXT,
+            endereco TEXT,
+            cidade TEXT,
+            uf TEXT,
+            cep TEXT,
+            status TEXT DEFAULT 'Ativo',
+            origem_cadastro TEXT DEFAULT 'DOCUMENTO',
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
-    for tabela in ["clientes", "fornecedores"]:
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS fornecedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER,
+            nome TEXT,
+            cnpj TEXT,
+            cnpj_cpf TEXT,
+            email TEXT,
+            telefone TEXT,
+            endereco TEXT,
+            cidade TEXT,
+            uf TEXT,
+            cep TEXT,
+            categoria_padrao TEXT,
+            tipo_padrao TEXT,
+            status TEXT DEFAULT 'Ativo',
+            origem_cadastro TEXT DEFAULT 'DOCUMENTO',
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    campos_por_tabela = {
+        "clientes": [
+            ("empresa_id", "INTEGER"),
+            ("nome", "TEXT"),
+            ("cnpj_cpf", "TEXT"),
+            ("email", "TEXT"),
+            ("telefone", "TEXT"),
+            ("endereco", "TEXT"),
+            ("cidade", "TEXT"),
+            ("uf", "TEXT"),
+            ("cep", "TEXT"),
+            ("status", "TEXT DEFAULT 'Ativo'"),
+            ("origem_cadastro", "TEXT DEFAULT 'DOCUMENTO'"),
+            ("nome_fantasia", "TEXT"),
+            ("cnae_principal", "TEXT"),
+            ("natureza_juridica", "TEXT"),
+            ("capital_social", "REAL"),
+            ("situacao_cadastral", "TEXT")
+        ],
+        "fornecedores": [
+            ("empresa_id", "INTEGER"),
+            ("nome", "TEXT"),
+            ("cnpj", "TEXT"),
+            ("cnpj_cpf", "TEXT"),
+            ("email", "TEXT"),
+            ("telefone", "TEXT"),
+            ("endereco", "TEXT"),
+            ("cidade", "TEXT"),
+            ("uf", "TEXT"),
+            ("cep", "TEXT"),
+            ("categoria_padrao", "TEXT"),
+            ("tipo_padrao", "TEXT"),
+            ("status", "TEXT DEFAULT 'Ativo'"),
+            ("origem_cadastro", "TEXT DEFAULT 'DOCUMENTO'"),
+            ("nome_fantasia", "TEXT"),
+            ("cnae_principal", "TEXT"),
+            ("natureza_juridica", "TEXT"),
+            ("capital_social", "REAL"),
+            ("situacao_cadastral", "TEXT")
+        ]
+    }
+
+    for tabela, campos in campos_por_tabela.items():
         cur.execute(f"PRAGMA table_info({tabela})")
         existentes = [c[1] for c in cur.fetchall()]
 
@@ -245,9 +317,6 @@ def garantir_enriquecimento_cadastral():
 
     conn.commit()
     conn.close()
-
-
-
 
 
 
