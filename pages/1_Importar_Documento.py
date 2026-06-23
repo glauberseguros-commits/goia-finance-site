@@ -1024,6 +1024,60 @@ def criar_evidencia_documental(cursor, processo_id, documento_id, analise, conta
 
     return evidencia_id
 
+
+
+def criar_pendencia_automatica_importador(
+    cursor,
+    empresa_id,
+    processo_id,
+    documento_id,
+    descricao,
+    tipo_evidencia,
+    proxima_acao=None
+):
+    cursor.execute("""
+        SELECT id
+        FROM processo_pendencias
+        WHERE empresa_id = ?
+          AND processo_id = ?
+          AND descricao = ?
+          AND COALESCE(status, 'Pendente') = 'Pendente'
+    """, (
+        empresa_id,
+        processo_id,
+        descricao
+    ))
+
+    existente = cursor.fetchone()
+
+    if existente:
+        return existente[0]
+
+    cursor.execute("""
+        INSERT INTO processo_pendencias (
+            processo_id,
+            descricao,
+            tipo_evidencia,
+            status,
+            empresa_id,
+            documento_id,
+            proxima_acao
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        processo_id,
+        descricao,
+        tipo_evidencia,
+        "Pendente",
+        empresa_id,
+        documento_id,
+        proxima_acao
+    ))
+
+    return cursor.lastrowid
+
+
+
 def criar_processo_documental(cursor, documento_id, analise):
     direcao = analise["direcao_sugerida"]
 
@@ -1087,12 +1141,15 @@ def criar_processo_documental(cursor, documento_id, analise):
     ))
 
     for descricao, tipo_evidencia in pendencias:
-        cursor.execute("""
-            INSERT INTO processo_pendencias (
-                processo_id, descricao, tipo_evidencia, status, empresa_id
-            )
-            VALUES (?, ?, ?, ?, ?)
-        """, (processo_id, descricao, tipo_evidencia, "Pendente", EMPRESA_ID_ATIVA))
+        criar_pendencia_automatica_importador(
+            cursor=cursor,
+            empresa_id=EMPRESA_ID_ATIVA,
+            processo_id=processo_id,
+            documento_id=documento_id,
+            descricao=descricao,
+            tipo_evidencia=tipo_evidencia,
+            proxima_acao=f"Anexar ou vincular: {tipo_evidencia}"
+        )
 
     return processo_id
 
