@@ -220,6 +220,32 @@ def extrair_dados_cartao_cnpj_pdf(arquivo):
     return dados
 
 
+
+def garantir_enriquecimento_cadastral():
+    conn = conectar()
+    cur = conn.cursor()
+
+    campos = [
+        ("nome_fantasia", "TEXT"),
+        ("cnae_principal", "TEXT"),
+        ("natureza_juridica", "TEXT"),
+        ("capital_social", "REAL"),
+        ("situacao_cadastral", "TEXT"),
+        ("origem_cadastro", "TEXT DEFAULT 'DOCUMENTO'")
+    ]
+
+    for tabela in ["clientes", "fornecedores"]:
+        cur.execute(f"PRAGMA table_info({tabela})")
+        existentes = [c[1] for c in cur.fetchall()]
+
+        for campo, tipo in campos:
+            if campo not in existentes:
+                cur.execute(f"ALTER TABLE {tabela} ADD COLUMN {campo} {tipo}")
+
+    conn.commit()
+    conn.close()
+
+
 def tela_login():
     st.markdown("""
     <style>
@@ -379,6 +405,7 @@ def tela_login():
     st.stop()
 
 preparar_banco()
+garantir_enriquecimento_cadastral()
 
 if not st.session_state.get("logado") or not st.session_state.get("empresa_id"):
     tela_login()
