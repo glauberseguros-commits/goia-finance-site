@@ -19,3 +19,5 @@ migracao_*.py
 baixar_*.py
 reescrever_*.py
 adicionar_compras_vendas.py
+
+bd/gofinance.db
