@@ -141,6 +141,7 @@ SCHEMA = {
         "descricao": "TEXT",
         "tipo_evidencia": "TEXT",
         "proxima_acao": "TEXT",
+        "prazo": "TEXT",
         "status": "TEXT DEFAULT 'Pendente'",
         "resolvido_em": "TEXT",
         "resolvido_por": "TEXT",
