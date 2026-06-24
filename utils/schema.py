@@ -393,3 +393,82 @@ def inicializar_schema_goia() -> None:
 
     conn.commit()
     conn.close()
+
+    garantir_repositorio_documental()
+
+
+
+def garantir_repositorio_documental():
+    """
+    Garante a estrutura mínima do Repositório Documental GOIA.
+
+    Regra da Arquitetura V1:
+    Todo arquivo enviado entra primeiro no repositório.
+    Depois pode ou não ser vinculado a entidade, processo, conta ou evidência.
+    """
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS repositorio_documental (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id INTEGER NOT NULL,
+            documento_id INTEGER,
+            nome_arquivo TEXT,
+            tipo_arquivo TEXT,
+            extensao TEXT,
+            tamanho_bytes INTEGER,
+            hash_arquivo TEXT,
+            caminho_arquivo TEXT,
+            origem_upload TEXT DEFAULT 'Importação',
+            tipo_documento_detectado TEXT,
+            classificacao_operacional TEXT,
+            status_repositorio TEXT DEFAULT 'Importado',
+            entidade_id INTEGER,
+            entidade_tipo TEXT,
+            processo_id INTEGER,
+            conta_receber_id INTEGER,
+            conta_pagar_id INTEGER,
+            movimento_bancario_id INTEGER,
+            uso_recomendado TEXT,
+            exige_acao_humana INTEGER DEFAULT 0,
+            observacao TEXT,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    campos = [
+        ("empresa_id", "INTEGER"),
+        ("documento_id", "INTEGER"),
+        ("nome_arquivo", "TEXT"),
+        ("tipo_arquivo", "TEXT"),
+        ("extensao", "TEXT"),
+        ("tamanho_bytes", "INTEGER"),
+        ("hash_arquivo", "TEXT"),
+        ("caminho_arquivo", "TEXT"),
+        ("origem_upload", "TEXT DEFAULT 'Importação'"),
+        ("tipo_documento_detectado", "TEXT"),
+        ("classificacao_operacional", "TEXT"),
+        ("status_repositorio", "TEXT DEFAULT 'Importado'"),
+        ("entidade_id", "INTEGER"),
+        ("entidade_tipo", "TEXT"),
+        ("processo_id", "INTEGER"),
+        ("conta_receber_id", "INTEGER"),
+        ("conta_pagar_id", "INTEGER"),
+        ("movimento_bancario_id", "INTEGER"),
+        ("uso_recomendado", "TEXT"),
+        ("exige_acao_humana", "INTEGER DEFAULT 0"),
+        ("observacao", "TEXT"),
+        ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP"),
+    ]
+
+    cur.execute("PRAGMA table_info(repositorio_documental)")
+    existentes = [c[1] for c in cur.fetchall()]
+
+    for campo, tipo in campos:
+        if campo not in existentes:
+            cur.execute(f"ALTER TABLE repositorio_documental ADD COLUMN {campo} {tipo}")
+
+    conn.commit()
+    conn.close()
+
