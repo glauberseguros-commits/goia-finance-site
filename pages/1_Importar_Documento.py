@@ -1403,6 +1403,9 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
             acoes.append("Venda e conta a receber criadas.")
 
     elif direcao in ["Nota Fiscal de Compra", "Boleto / Despesa"]:
+        acoes.append(f"DEBUG documento normalizado: {normalizar_documento(parte_doc)}")
+        acoes.append(f"DEBUG documento valido: {documento_entidade_valido(parte_doc)}")
+        acoes.append(f"DEBUG nome valido: {nome_entidade_valido(parte_nome)}")
         fornecedor_id = obter_ou_criar_fornecedor(cur, parte_doc, parte_nome)
         acoes.append(f"DEBUG fornecedor_id: {fornecedor_id}")
         produto_id = obter_ou_criar_produto(cur, descricao, custo=valor, preco_venda=0)
