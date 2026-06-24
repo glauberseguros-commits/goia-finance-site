@@ -1,4 +1,7 @@
 import sqlite3
+import json
+import urllib.request
+import urllib.error
 import os
 import hashlib
 import re
@@ -745,6 +748,70 @@ def garantir_empresa_bootstrap():
 
 
 
+
+def consultar_cnpj_publica_ws(cnpj):
+    cnpj_limpo = limpar_cnpj(cnpj)
+
+    if not cnpj_limpo or len(cnpj_limpo) != 14:
+        return {}
+
+    try:
+        req = urllib.request.Request(
+            f"https://publica.cnpj.ws/cnpj/{cnpj_limpo}",
+            headers={"User-Agent": "GOIA-Finance/1.0"}
+        )
+
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        est = data.get("estabelecimento") or {}
+        cidade = est.get("cidade") or {}
+        estado = est.get("estado") or {}
+        atividade_principal = est.get("atividade_principal") or {}
+        atividades_secundarias = est.get("atividades_secundarias") or []
+        socios = data.get("socios") or []
+
+        cnaes_secundarios = []
+        for item in atividades_secundarias:
+            codigo = str(item.get("subclasse") or item.get("id") or "").strip()
+            descricao = str(item.get("descricao") or "").strip()
+            if codigo or descricao:
+                cnaes_secundarios.append(f"{codigo} - {descricao}".strip(" -"))
+
+        qsa = []
+        for socio in socios:
+            nome = str(socio.get("nome") or "").strip()
+            qualificacao = str((socio.get("qualificacao_socio") or {}).get("descricao") or "").strip()
+            if nome:
+                qsa.append(f"{nome} - {qualificacao}".strip(" -"))
+
+        return {
+            "nome": data.get("razao_social") or "",
+            "nome_fantasia": est.get("nome_fantasia") or "",
+            "cnpj": cnpj_limpo,
+            "situacao_cadastral": est.get("situacao_cadastral") or "",
+            "data_abertura": est.get("data_inicio_atividade") or "",
+            "porte": (data.get("porte") or {}).get("descricao") or "",
+            "natureza_juridica": (data.get("natureza_juridica") or {}).get("descricao") or "",
+            "capital_social": data.get("capital_social") or "",
+            "cnae_principal": f"{atividade_principal.get('subclasse') or ''} - {atividade_principal.get('descricao') or ''}".strip(" -"),
+            "cnaes_secundarios": "\n".join(cnaes_secundarios),
+            "cep": est.get("cep") or "",
+            "logradouro": est.get("logradouro") or "",
+            "numero": est.get("numero") or "",
+            "complemento": est.get("complemento") or "",
+            "bairro": est.get("bairro") or "",
+            "municipio": cidade.get("nome") or "",
+            "uf": estado.get("sigla") or "",
+            "email": est.get("email") or "",
+            "telefone": f"{est.get('ddd1') or ''}{est.get('telefone1') or ''}",
+            "qsa": "\n".join(qsa),
+        }
+
+    except Exception:
+        return {}
+
+
 def suspender_testes_expirados():
     conn = conectar()
     cur = conn.cursor()
@@ -838,8 +905,16 @@ def tela_login():
         else:
             dados_doc = extrair_dados_cartao_cnpj_pdf(documento_empresa)
 
+            if dados_doc.get("cnpj"):
+                dados_api = consultar_cnpj_publica_ws(dados_doc.get("cnpj"))
+
+                if dados_api:
+                    for chave, valor in dados_api.items():
+                        if valor not in [None, ""]:
+                            dados_doc[chave] = valor
+
             if dados_doc.get("nome") and dados_doc.get("cnpj"):
-                st.success(f"Documento lido: {documento_empresa.name}")
+                st.success(f"Documento lido e cadastro enriquecido pela API CNPJ: {documento_empresa.name}")
             else:
                 st.error("Documento anexado, mas não foi possível identificar Razão Social e CNPJ. Envie o Cartão CNPJ oficial em PDF.")
 
@@ -866,16 +941,16 @@ def tela_login():
         with st.container(border=True):
             st.markdown("### Dados empresariais identificados")
 
-            nome_oficial = st.text_input(
-                "Razão Social",
-                value=nome_oficial,
-                disabled=not documento_valido
-            )
-
             cnpj_oficial = st.text_input(
                 "CNPJ",
                 value=cnpj_oficial,
                 disabled=True
+            )
+
+            nome_oficial = st.text_input(
+                "Razão Social",
+                value=nome_oficial,
+                disabled=not documento_valido
             )
 
             nome_fantasia = st.text_input("Nome Fantasia", value=(dados_doc.get("nome_fantasia") or ""))
@@ -917,9 +992,30 @@ def tela_login():
             if empresa_existente is not None and bool(empresa_existente.get("senha_hash")):
                 bloquear_cadastro = True
 
+            campos_obrigatorios_ok = all([
+                nome_oficial.strip(),
+                cnpj_oficial.strip(),
+                nome_fantasia.strip(),
+                situacao_cadastral.strip(),
+                natureza_juridica.strip(),
+                capital_social.strip(),
+                cep.strip(),
+                logradouro.strip(),
+                bairro.strip(),
+                municipio.strip(),
+                uf.strip(),
+                email.strip(),
+                telefone.strip(),
+                senha.strip(),
+                confirmar.strip(),
+            ])
+
+            if documento_valido and not campos_obrigatorios_ok:
+                st.warning("Preencha todos os campos obrigatórios antes de criar a conta.")
+
             criar = st.button(
                 "Criar conta",
-                disabled=bool(bloquear_cadastro)
+                disabled=bool(bloquear_cadastro or not campos_obrigatorios_ok)
             )
 
         if criar:
