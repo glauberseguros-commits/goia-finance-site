@@ -844,18 +844,42 @@ def tela_login():
                 )
 
         with st.container(border=True):
-            st.text_input(
-                "Razão Social identificada no Cartão CNPJ",
+            st.markdown("### Dados empresariais identificados")
+
+            nome_oficial = st.text_input(
+                "Razão Social",
                 value=nome_oficial,
-                disabled=True
+                disabled=not documento_valido
             )
 
-            st.text_input(
-                "CNPJ identificado no Cartão CNPJ",
+            cnpj_oficial = st.text_input(
+                "CNPJ",
                 value=cnpj_oficial,
                 disabled=True
             )
 
+            nome_fantasia = st.text_input("Nome Fantasia", value=(dados_doc.get("nome_fantasia") or ""))
+            situacao_cadastral = st.text_input("Situação Cadastral", value=(dados_doc.get("situacao_cadastral") or dados_doc.get("situacao") or ""))
+            data_abertura = st.text_input("Data de Abertura", value=(dados_doc.get("data_abertura") or dados_doc.get("abertura") or ""))
+            porte = st.text_input("Porte", value=(dados_doc.get("porte") or ""))
+            natureza_juridica = st.text_input("Natureza Jurídica", value=(dados_doc.get("natureza_juridica") or ""))
+            capital_social = st.text_input("Capital Social", value=str(dados_doc.get("capital_social") or ""))
+
+            cnae_principal = st.text_input("CNAE Principal", value=(dados_doc.get("cnae_principal") or dados_doc.get("cnae") or ""))
+            cnaes_secundarios = st.text_area("CNAEs Secundários", value=str(dados_doc.get("cnaes_secundarios") or ""))
+
+            st.markdown("### Endereço")
+            cep = st.text_input("CEP", value=(dados_doc.get("cep") or ""))
+            logradouro = st.text_input("Logradouro", value=(dados_doc.get("logradouro") or dados_doc.get("endereco") or ""))
+            numero = st.text_input("Número", value=(dados_doc.get("numero") or ""))
+            complemento = st.text_input("Complemento", value=(dados_doc.get("complemento") or ""))
+            bairro = st.text_input("Bairro", value=(dados_doc.get("bairro") or ""))
+            municipio = st.text_input("Município", value=(dados_doc.get("municipio") or dados_doc.get("cidade") or ""))
+            uf = st.text_input("UF", value=(dados_doc.get("uf") or ""))
+
+            qsa = st.text_area("Sócios / QSA", value=str(dados_doc.get("qsa") or dados_doc.get("socios") or ""))
+
+            st.markdown("### Acesso")
             email = st.text_input("E-mail de acesso", value=(dados_doc.get("email") or ""))
             telefone = st.text_input(
                 "Telefone / WhatsApp",
@@ -885,12 +909,37 @@ def tela_login():
                 st.error("Cadastro bloqueado: este CNPJ já possui conta cadastrada.")
             elif senha != confirmar:
                 st.error("As senhas não conferem.")
+            elif not nome_oficial.strip() or not cnpj_oficial.strip():
+                st.error("Razão Social e CNPJ são obrigatórios.")
+            elif not nome_fantasia.strip() or not situacao_cadastral.strip() or not natureza_juridica.strip() or not capital_social.strip():
+                st.error("Nome Fantasia, Situação Cadastral, Natureza Jurídica e Capital Social são obrigatórios.")
+            elif not cep.strip() or not logradouro.strip() or not bairro.strip() or not municipio.strip() or not uf.strip():
+                st.error("Endereço completo é obrigatório.")
             elif not email.strip() or not telefone.strip() or not senha:
                 st.error("Informe e-mail, telefone e senha.")
             elif not telefone_valido(telefone):
                 st.error("Telefone inválido. Informe DDD + número, exemplo: (61) 99987-8710.")
             else:
-                ok, msg, empresa_id = criar_empresa(nome_oficial, cnpj_oficial, email, telefone, senha)
+                dados_cadastrais = {
+                    "nome_fantasia": nome_fantasia,
+                    "situacao_cadastral": situacao_cadastral,
+                    "data_abertura": data_abertura,
+                    "porte": porte,
+                    "natureza_juridica": natureza_juridica,
+                    "capital_social": capital_social.replace(".", "").replace(",", ".") if capital_social else 0,
+                    "cnae_principal": cnae_principal,
+                    "cnaes_secundarios": cnaes_secundarios,
+                    "cep": cep,
+                    "logradouro": logradouro,
+                    "numero": numero,
+                    "complemento": complemento,
+                    "bairro": bairro,
+                    "municipio": municipio,
+                    "uf": uf,
+                    "qsa": qsa,
+                }
+
+                ok, msg, empresa_id = criar_empresa(nome_oficial, cnpj_oficial, email, telefone, senha, dados_cadastrais)
 
                 if ok:
                     st.session_state["logado"] = True
