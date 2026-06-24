@@ -745,6 +745,26 @@ def garantir_empresa_bootstrap():
 
 
 
+def suspender_testes_expirados():
+    conn = conectar()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            UPDATE empresas
+            SET status_assinatura = 'Suspensa',
+                motivo_bloqueio = 'Teste grátis de 7 dias expirado'
+            WHERE status_assinatura = 'Teste'
+              AND data_fim_assinatura IS NOT NULL
+              AND datetime(data_fim_assinatura) < datetime('now')
+        """)
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
 def tela_login():
     st.markdown("""
     <style>
@@ -954,6 +974,7 @@ def tela_login():
 
 preparar_banco()
 inicializar_schema_goia()
+suspender_testes_expirados()
 garantir_enriquecimento_cadastral()
 garantir_motor_encerramento()
 garantir_schema_documental()
