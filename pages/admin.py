@@ -65,6 +65,24 @@ def garantir_colunas_admin():
     conn = conectar()
     cur = conn.cursor()
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS empresas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL DEFAULT '',
+            nome_fantasia TEXT,
+            cnpj_cpf TEXT,
+            email TEXT,
+            telefone TEXT,
+            senha_hash TEXT,
+            plano TEXT DEFAULT 'Teste',
+            status_assinatura TEXT DEFAULT 'Ativa',
+            admin_nome TEXT,
+            motivo_bloqueio TEXT,
+            observacao_admin TEXT,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     colunas = {
         "plano": "TEXT DEFAULT 'Teste'",
         "status_assinatura": "TEXT DEFAULT 'Ativa'",
