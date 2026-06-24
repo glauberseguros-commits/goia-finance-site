@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from utils.db import conectar_banco
+from utils.schema import inicializar_schema_goia
 from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero
 
@@ -209,6 +210,7 @@ def contar_tabela(tabela):
 
 
 autenticar_master()
+inicializar_schema_goia()
 garantir_colunas_admin()
 
 st.sidebar.markdown("## Admin GOIA")
