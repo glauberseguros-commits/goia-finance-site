@@ -1273,6 +1273,71 @@ def criar_processo_documental(cursor, documento_id, analise):
     return processo_id
 
 
+def registrar_no_repositorio_documental(cursor, documento_id, nome_arquivo, analise):
+    nome = str(nome_arquivo or "")
+    extensao = nome.rsplit(".", 1)[-1].lower() if "." in nome else ""
+
+    cursor.execute("""
+        SELECT id
+        FROM repositorio_documental
+        WHERE empresa_id = ?
+          AND documento_id = ?
+    """, (EMPRESA_ID_ATIVA, documento_id))
+
+    if cursor.fetchone():
+        return None
+
+    classificacao = analise.get("direcao_sugerida") or ""
+    tipo_detectado = analise.get("tipo_detectado") or ""
+
+    uso_recomendado = "Repositório"
+    exige_acao_humana = 0
+
+    if classificacao == "Cadastro":
+        uso_recomendado = "Evidência cadastral"
+        exige_acao_humana = 1
+    elif classificacao in ["Nota Fiscal de Venda", "Nota de Empenho"]:
+        uso_recomendado = "Evidência financeira - Receber"
+    elif classificacao in ["Nota Fiscal de Compra", "Boleto / Despesa"]:
+        uso_recomendado = "Evidência financeira - Pagar"
+    elif classificacao in ["Comprovante de Recebimento", "Comprovante de Pagamento", "Extrato Bancário"]:
+        uso_recomendado = "Evidência bancária"
+    elif "Conferência" in classificacao or classificacao == "A classificar":
+        uso_recomendado = "Pendente de análise"
+        exige_acao_humana = 1
+
+    cursor.execute("""
+        INSERT INTO repositorio_documental (
+            empresa_id,
+            documento_id,
+            nome_arquivo,
+            extensao,
+            origem_upload,
+            tipo_documento_detectado,
+            classificacao_operacional,
+            status_repositorio,
+            uso_recomendado,
+            exige_acao_humana,
+            observacao
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        EMPRESA_ID_ATIVA,
+        documento_id,
+        nome,
+        extensao,
+        "Importação documental",
+        tipo_detectado,
+        classificacao,
+        "Classificado",
+        uso_recomendado,
+        exige_acao_humana,
+        "Registrado automaticamente pelo importador documental"
+    ))
+
+    return cursor.lastrowid
+
+
 def salvar_documento_erp(nome_arquivo, texto, analise):
     conn = conectar()
     cur = conn.cursor()
@@ -1354,9 +1419,13 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
     ))
 
     documento_id = cur.lastrowid
+    repositorio_id = registrar_no_repositorio_documental(cur, documento_id, nome_arquivo, analise)
     conta_receber_id = None
     conta_pagar_id = None
-    acoes = ["Documento salvo."]
+    acoes = ["Documento salvo no Repositório Documental."]
+
+    if repositorio_id:
+        acoes.append(f"Repositório Documental ID: {repositorio_id}")
 
     descricao = extrair_descricao_produto_nfe(texto)
 
