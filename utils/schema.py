@@ -406,7 +406,7 @@ def garantir_repositorio_documental():
     Todo arquivo enviado entra primeiro no repositório.
     Depois pode ou não ser vinculado a entidade, processo, conta ou evidência.
     """
-    conn = conectar()
+    conn = conectar_banco()
     cur = conn.cursor()
 
     cur.execute("""
