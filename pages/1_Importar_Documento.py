@@ -1360,6 +1360,10 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
 
     descricao = extrair_descricao_produto_nfe(texto)
 
+    acoes.append(f"DEBUG direção: {direcao}")
+    acoes.append(f"DEBUG contraparte documento: {parte_doc}")
+    acoes.append(f"DEBUG contraparte nome: {parte_nome}")
+
     if direcao == "Nota Fiscal de Venda":
         cliente_id = obter_ou_criar_cliente(cur, parte_doc, parte_nome)
         produto_id = obter_ou_criar_produto(cur, descricao, custo=0, preco_venda=valor)
@@ -1400,6 +1404,7 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
 
     elif direcao in ["Nota Fiscal de Compra", "Boleto / Despesa"]:
         fornecedor_id = obter_ou_criar_fornecedor(cur, parte_doc, parte_nome)
+        acoes.append(f"DEBUG fornecedor_id: {fornecedor_id}")
         produto_id = obter_ou_criar_produto(cur, descricao, custo=valor, preco_venda=0)
 
         if fornecedor_id:
