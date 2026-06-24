@@ -43,14 +43,15 @@ def autenticar_master():
     st.title("🛡️ Admin GOIA")
     st.caption("Área Master do proprietário da plataforma.")
 
-    senha = st.text_input("Senha master", type="password")
+    senha = st.text_input("Senha master", type="password").strip()
 
     if st.button("Acessar Admin GOIA"):
         if senha == senha_admin:
             st.session_state["goia_admin_logado"] = True
+            st.success("Acesso autorizado.")
             st.rerun()
         else:
-            st.error("Senha master inválida.")
+            st.error("Senha master inválida. Verifique se a senha digitada é exatamente igual à GOIA_ADMIN_PASSWORD do Render.")
 
     st.stop()
 
