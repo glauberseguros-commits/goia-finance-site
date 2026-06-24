@@ -1016,6 +1016,7 @@ st.sidebar.page_link("pages/2_Contas_a_Receber.py", label="Contas a Receber", ic
 st.sidebar.page_link("pages/3_Contas_a_Pagar.py", label="Contas a Pagar", icon="💸")
 st.sidebar.page_link("pages/8_Movimentos_Bancarios.py", label="Movimentos Bancários", icon="🏦")
 st.sidebar.page_link("pages/8_Conciliacao_Bancaria.py", label="Conciliação Bancária", icon="⚖️")
+st.sidebar.page_link("pages/11_Admin_GOIA.py", label="Admin GOIA", icon="🛡️")
 st.sidebar.page_link("pages/99_Diagnostico_Banco.py", label="Diagnóstico Banco", icon="🧪")
 
 hero(
