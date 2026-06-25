@@ -1,6 +1,6 @@
 import os
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pandas as pd
 import streamlit as st
@@ -27,9 +27,16 @@ def hash_senha(senha):
 def texto(v):
     if v is None:
         return ""
-    if pd.isna(v):
-        return ""
+    try:
+        if pd.isna(v):
+            return ""
+    except Exception:
+        pass
     return str(v).strip()
+
+
+def limpar_digitos(v):
+    return "".join(filter(str.isdigit, texto(v)))
 
 
 def moeda(v):
@@ -51,10 +58,58 @@ def data_br(v):
     return v
 
 
+def data_sql(v):
+    v = texto(v)
+    if not v:
+        return ""
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(v[:19], fmt).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    return v
+
+
+def data_fim_teste(data_inicio, data_fim, plano):
+    fim = texto(data_fim)
+    if fim:
+        return fim
+
+    if texto(plano).lower() != "teste":
+        return ""
+
+    inicio = texto(data_inicio)
+    if not inicio:
+        return ""
+
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y"):
+        try:
+            return (datetime.strptime(inicio[:19], fmt) + timedelta(days=7)).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+
+    return ""
+
+
 def formatar_cnpj(v):
-    n = "".join(filter(str.isdigit, texto(v)))
+    n = limpar_digitos(v)
     if len(n) == 14:
         return f"{n[:2]}.{n[2:5]}.{n[5:8]}/{n[8:12]}-{n[12:]}"
+    return texto(v)
+
+
+def formatar_telefone(v):
+    n = limpar_digitos(v)
+
+    if len(n) == 11:
+        return f"{n[:2]} - {n[2]} {n[3:7]}-{n[7:]}"
+    if len(n) == 10:
+        return f"{n[:2]} - {n[2:6]}-{n[6:]}"
+    if len(n) == 9:
+        return f"{n[0]} {n[1:5]}-{n[5:]}"
+    if len(n) == 8:
+        return f"{n[:4]}-{n[4:]}"
+
     return texto(v)
 
 
@@ -66,30 +121,24 @@ def aplicar_estilo_admin():
                 radial-gradient(circle at top left, rgba(49,46,129,.16), transparent 34%),
                 linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #f8fafc 100%) !important;
         }
-
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, #0f172a 0%, #111827 100%) !important;
         }
-
         section[data-testid="stSidebar"] > div:first-child > div:first-child {
             display: none !important;
         }
-
         [data-testid="stSidebarNav"] {
             display: none !important;
         }
-
         [data-testid="stSidebar"] * {
             color: #f8fafc !important;
             opacity: 1 !important;
             font-weight: 700 !important;
         }
-
         .block-container {
             max-width: 1280px !important;
             padding-top: 2.5rem !important;
         }
-
         .admin-login-card {
             max-width: 720px;
             margin: 8vh auto 30px auto;
@@ -99,7 +148,6 @@ def aplicar_estilo_admin():
             border: 1px solid rgba(148,163,184,.35);
             box-shadow: 0 30px 90px rgba(15,23,42,.18);
         }
-
         .admin-badge {
             display: inline-flex;
             padding: 8px 14px;
@@ -112,7 +160,6 @@ def aplicar_estilo_admin():
             text-transform: uppercase;
             margin-bottom: 18px;
         }
-
         .admin-title {
             color: #0f172a;
             font-size: 46px;
@@ -121,13 +168,11 @@ def aplicar_estilo_admin():
             line-height: 1.05;
             margin-bottom: 12px;
         }
-
         .admin-subtitle {
             color: #334155;
             font-size: 16px;
             font-weight: 600;
         }
-
         .admin-hero {
             padding: 38px 42px;
             border-radius: 28px;
@@ -135,14 +180,12 @@ def aplicar_estilo_admin():
             box-shadow: 0 28px 70px rgba(30,41,59,.24);
             margin-bottom: 28px;
         }
-
         .admin-hero small {
             color: #5eead4;
             letter-spacing: .17em;
             font-weight: 900;
             text-transform: uppercase;
         }
-
         .admin-hero h1 {
             color: white;
             font-size: 42px;
@@ -150,14 +193,12 @@ def aplicar_estilo_admin():
             letter-spacing: -.045em;
             margin: 12px 0;
         }
-
         .admin-hero p {
             color: #dbeafe;
             font-size: 16px;
             font-weight: 500;
             margin: 0;
         }
-
         .goia-card {
             background: rgba(255,255,255,.97);
             border: 1px solid rgba(148,163,184,.35);
@@ -166,7 +207,6 @@ def aplicar_estilo_admin():
             box-shadow: 0 18px 42px rgba(15,23,42,.10);
             margin-bottom: 18px;
         }
-
         .goia-chip {
             display:inline-flex;
             align-items:center;
@@ -180,7 +220,6 @@ def aplicar_estilo_admin():
             letter-spacing:.04em;
             text-transform:uppercase;
         }
-
         .goia-danger {
             background:#fff1f2;
             border:1px solid #fecdd3;
@@ -189,7 +228,6 @@ def aplicar_estilo_admin():
             padding:18px;
             font-weight:700;
         }
-
         div.stButton > button {
             background: linear-gradient(135deg, #ff5a3c 0%, #ef4444 100%) !important;
             color: white !important;
@@ -198,7 +236,6 @@ def aplicar_estilo_admin():
             font-weight: 900 !important;
             box-shadow: 0 16px 34px rgba(239,68,68,.30);
         }
-
         [data-testid="stTextInput"] input,
         [data-testid="stSelectbox"] div,
         textarea {
@@ -208,7 +245,6 @@ def aplicar_estilo_admin():
             color: #0f172a !important;
             font-weight: 600 !important;
         }
-
         [data-testid="stTextInput"] input:disabled,
         textarea:disabled {
             background:#f8fafc !important;
@@ -217,7 +253,6 @@ def aplicar_estilo_admin():
             opacity:1 !important;
             font-weight:800 !important;
         }
-
         div[data-testid="metric-container"] {
             background: rgba(255,255,255,.96) !important;
             border: 1px solid rgba(148,163,184,.35) !important;
@@ -225,19 +260,16 @@ def aplicar_estilo_admin():
             padding: 24px !important;
             box-shadow: 0 18px 42px rgba(15,23,42,.10) !important;
         }
-
         div[data-testid="metric-container"] label,
         div[data-testid="metric-container"] p {
             color: #1e293b !important;
             font-weight: 850 !important;
         }
-
         div[data-testid="metric-container"] [data-testid="stMetricValue"] {
             color: #0f172a !important;
             font-size: 40px !important;
             font-weight: 950 !important;
         }
-
         [data-testid="stAlert"] {
             border-radius: 16px !important;
             border: 1px solid rgba(99,102,241,.28) !important;
@@ -289,18 +321,7 @@ def carregar_empresas():
             nome_fantasia,
             cnpj_cpf,
             email,
-            CASE
-WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
-THEN
-substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
-|| " - "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
-|| " "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
-|| "-"
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
-ELSE telefone
-END AS telefone,
+            telefone,
             senha_hash,
             situacao_cadastral,
             data_abertura,
@@ -321,15 +342,6 @@ END AS telefone,
             status_assinatura,
             periodo_assinatura,
             data_inicio_assinatura,
-CASE
-WHEN plano='Teste'
-AND (
-data_fim_assinatura IS NULL
-OR data_fim_assinatura=''
-)
-THEN date(data_inicio_assinatura,'+7 day')
-ELSE data_fim_assinatura
-END AS data_fim_assinatura,
             data_fim_assinatura,
             motivo_bloqueio,
             observacao_admin,
@@ -339,12 +351,24 @@ END AS data_fim_assinatura,
         ORDER BY id DESC
     """, conn)
     conn.close()
+
+    if not df.empty:
+        df["telefone_formatado"] = df["telefone"].apply(formatar_telefone)
+        df["cnpj_formatado"] = df["cnpj_cpf"].apply(formatar_cnpj)
+        df["data_fim_assinatura_calculada"] = df.apply(
+            lambda r: data_fim_teste(
+                r.get("data_inicio_assinatura"),
+                r.get("data_fim_assinatura"),
+                r.get("plano"),
+            ),
+            axis=1,
+        )
+
     return df
 
 
 def carregar_empresa(empresa_id):
     conn = conectar()
-    conn.row_factory = None
     df = pd.read_sql_query("""
         SELECT *
         FROM empresas
@@ -356,7 +380,16 @@ def carregar_empresa(empresa_id):
     if df.empty:
         return None
 
-    return df.iloc[0].to_dict()
+    e = df.iloc[0].to_dict()
+    e["telefone_formatado"] = formatar_telefone(e.get("telefone"))
+    e["cnpj_formatado"] = formatar_cnpj(e.get("cnpj_cpf"))
+    e["data_fim_assinatura_calculada"] = data_fim_teste(
+        e.get("data_inicio_assinatura"),
+        e.get("data_fim_assinatura"),
+        e.get("plano"),
+    )
+
+    return e
 
 
 def contar_tabela(tabela, empresa_id=None):
@@ -394,6 +427,8 @@ def soma_tabela(tabela, coluna, empresa_id=None):
 
 
 def atualizar_admin_empresa(empresa_id, plano, status, periodo, data_fim, motivo, observacao):
+    data_fim_db = data_sql(data_fim)
+
     conn = conectar()
     cur = conn.cursor()
     cur.execute("""
@@ -406,7 +441,7 @@ def atualizar_admin_empresa(empresa_id, plano, status, periodo, data_fim, motivo
             observacao_admin = ?,
             atualizado_em = CURRENT_TIMESTAMP
         WHERE id = ?
-    """, (plano, status, periodo, data_fim, motivo, observacao, empresa_id))
+    """, (plano, status, periodo, data_fim_db, motivo, observacao, empresa_id))
     conn.commit()
     conn.close()
 
@@ -458,10 +493,8 @@ def badge_status(status):
 
     if status in ["Ativa", "VIP"]:
         return f"🟢 {status}"
-
-    if status in ["Teste"]:
+    if status == "Teste":
         return f"🟡 {status}"
-
     if status in ["Suspensa", "Bloqueada", "Inativa"]:
         return f"🔴 {status}"
 
@@ -508,34 +541,24 @@ def dashboard_master(empresas):
         st.info("Nenhum assinante cadastrado.")
         return
 
+    df = empresas.copy()
+    df["cnpj_cpf"] = df["cnpj_cpf"].apply(formatar_cnpj)
+    df["telefone"] = df["telefone"].apply(formatar_telefone)
+    df["criado_em"] = df["criado_em"].apply(data_br)
+
     cols = [
         "id",
         "nome",
         "nome_fantasia",
         "cnpj_cpf",
         "email",
-        "CASE
-WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
-THEN
-substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
-|| " - "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
-|| " "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
-|| "-"
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
-ELSE telefone
-END AS telefone",
+        "telefone",
         "plano",
         "status_assinatura",
         "criado_em",
     ]
 
-    df = empresas[[c for c in cols if c in empresas.columns]].copy()
-    df["cnpj_cpf"] = df["cnpj_cpf"].apply(formatar_cnpj)
-    df["criado_em"] = df["criado_em"].apply(data_br)
-
-    st.dataframe(df.head(15), use_container_width=True, hide_index=True)
+    st.dataframe(df[[c for c in cols if c in df.columns]].head(15), use_container_width=True, hide_index=True)
 
 
 def selecionar_empresa(empresas):
@@ -543,18 +566,7 @@ def selecionar_empresa(empresas):
         st.info("Nenhum assinante cadastrado.")
         return None
 
-    busca = st.text_input("Buscar assinante por nome, CNPJ, e-mail, CASE
-WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
-THEN
-substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
-|| " - "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
-|| " "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
-|| "-"
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
-ELSE telefone
-END AS telefone ou status")
+    busca = st.text_input("Buscar assinante por nome, CNPJ, e-mail, telefone ou status")
 
     df = empresas.copy()
 
@@ -563,7 +575,7 @@ END AS telefone ou status")
         df = df[
             df.astype(str).apply(
                 lambda linha: linha.str.lower().str.contains(termo, na=False).any(),
-                axis=1
+                axis=1,
             )
         ]
 
@@ -573,7 +585,7 @@ END AS telefone ou status")
 
     opcoes = df.apply(
         lambda r: f"{r['id']} | {texto(r.get('nome'))} | {formatar_cnpj(r.get('cnpj_cpf'))} | {texto(r.get('status_assinatura'))}",
-        axis=1
+        axis=1,
     ).tolist()
 
     selecionado = st.selectbox("Selecionar assinante", opcoes)
@@ -631,29 +643,7 @@ def ficha_contato_acesso(e):
     with c1:
         campo_info("E-mail", e.get("email"), "view_email")
     with c2:
-        campo_info("Telefone", e.get("CASE
-WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
-THEN
-substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
-|| " - "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
-|| " "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
-|| "-"
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
-ELSE telefone
-END AS telefone"), "view_CASE
-WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
-THEN
-substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
-|| " - "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
-|| " "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
-|| "-"
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
-ELSE telefone
-END AS telefone")
+        campo_info("Telefone", formatar_telefone(e.get("telefone")), "view_telefone")
     with c3:
         senha_status = "Configurada" if texto(e.get("senha_hash")) else "Não configurada"
         campo_info("Senha", senha_status, "view_senha_status")
@@ -699,18 +689,10 @@ def ficha_operacao(e):
 
     c4, c5 = st.columns(2)
     with c4:
-        campo_info("Início da assinatura", data_br(e.get("data_inicio_assinatura,
-CASE
-WHEN plano='Teste'
-AND (
-data_fim_assinatura IS NULL
-OR data_fim_assinatura=''
-)
-THEN date(data_inicio_assinatura,'+7 day')
-ELSE data_fim_assinatura
-END AS data_fim_assinatura")), f"inicio_{e['id']}")
+        campo_info("Início da assinatura", data_br(e.get("data_inicio_assinatura")), f"inicio_{e['id']}")
     with c5:
-        data_fim = st.text_input("Fim da assinatura", value=data_br(e.get("data_fim_assinatura")), key=f"fim_{e['id']}")
+        fim_calculado = e.get("data_fim_assinatura_calculada") or e.get("data_fim_assinatura")
+        data_fim = st.text_input("Fim da assinatura", value=data_br(fim_calculado), key=f"fim_{e['id']}")
 
     motivo = st.text_area("Motivo de bloqueio/suspensão", value=texto(e.get("motivo_bloqueio")), key=f"motivo_{e['id']}")
     observacao = st.text_area("Observação administrativa", value=texto(e.get("observacao_admin")), key=f"obs_{e['id']}")
@@ -812,18 +794,7 @@ def pagina_assinantes(empresas):
         <span class="goia-chip">{badge_status(empresa.get("status_assinatura"))}</span>
         <h2 style="margin:16px 0 4px 0;color:#0f172a;">{texto(empresa.get("nome"))}</h2>
         <p style="margin:0;color:#475569;font-weight:700;">
-            {formatar_cnpj(empresa.get("cnpj_cpf"))} · {texto(empresa.get("email"))} · {texto(empresa.get("CASE
-WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
-THEN
-substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
-|| " - "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
-|| " "
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
-|| "-"
-|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
-ELSE telefone
-END AS telefone"))}
+            {formatar_cnpj(empresa.get("cnpj_cpf"))} · {texto(empresa.get("email"))} · {formatar_telefone(empresa.get("telefone"))}
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -874,6 +845,7 @@ def pagina_auditoria(empresas):
 
     cols = ["id", "nome", "cnpj_cpf", "status_assinatura", "criado_em", "atualizado_em"]
     df = empresas[[c for c in cols if c in empresas.columns]].copy()
+
     if "cnpj_cpf" in df.columns:
         df["cnpj_cpf"] = df["cnpj_cpf"].apply(formatar_cnpj)
     if "criado_em" in df.columns:
