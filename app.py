@@ -4,6 +4,7 @@ import os
 import hashlib
 import re
 from io import BytesIO
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -50,23 +51,8 @@ def moeda(v):
         return "R$ 0,00"
 
 
-def normalizar_capital_social(valor):
-    if valor is None:
-        return 0.0
-
-    txt = str(valor).strip()
-    if not txt:
-        return 0.0
-
-    txt = txt.replace("R$", "").replace(" ", "")
-
-    if "," in txt:
-        txt = txt.replace(".", "").replace(",", ".")
-
-    try:
-        return float(txt)
-    except Exception:
-        return 0.0
+def texto_padrao(v):
+    return str(v or "").strip()
 
 
 def formatar_cnpj(valor):
@@ -76,35 +62,68 @@ def formatar_cnpj(valor):
     return valor or ""
 
 
-def texto_padrao(v):
-    return str(v or "").strip()
+def data_br(valor):
+    valor = texto_padrao(valor)
+    if not valor:
+        return ""
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(valor, fmt).strftime("%d/%m/%Y")
+        except Exception:
+            pass
+    return valor
+
+
+def data_iso(valor):
+    valor = texto_padrao(valor)
+    if not valor:
+        return ""
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(valor, fmt).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    return valor
+
+
+def normalizar_capital_social(valor):
+    if valor is None:
+        return 0.0
+    txt = str(valor).strip()
+    if not txt:
+        return 0.0
+    txt = txt.replace("R$", "").replace(" ", "")
+    if "," in txt:
+        txt = txt.replace(".", "").replace(",", ".")
+    try:
+        return float(txt)
+    except Exception:
+        return 0.0
+
+
+def formatar_capital_social(valor):
+    return moeda(normalizar_capital_social(valor))
 
 
 def empresa_existe_por_cnpj(cnpj):
     conn = conectar()
     cur = conn.cursor()
-
     cur.execute("""
         SELECT id, nome, senha_hash
         FROM empresas
         WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
         LIMIT 1
     """, (limpar_cnpj(cnpj),))
-
     row = cur.fetchone()
     conn.close()
-
     if row:
         return {"id": row[0], "nome": row[1], "senha_hash": row[2]}
-
     return None
 
 
 def buscar_empresa(cnpj, senha):
     conn = conectar()
-    conn.row_factory = None
     cur = conn.cursor()
-
     cur.execute("""
         SELECT id, nome, cnpj_cpf
         FROM empresas
@@ -113,41 +132,27 @@ def buscar_empresa(cnpj, senha):
           AND COALESCE(status_assinatura, 'Ativa') = 'Ativa'
         LIMIT 1
     """, (limpar_cnpj(cnpj), hash_senha(senha)))
-
     row = cur.fetchone()
     conn.close()
-
     if not row:
         return None
-
     return {"id": row[0], "nome": row[1], "cnpj_cpf": row[2]}
 
 
 def extrair_dados_cartao_cnpj_pdf(arquivo):
-    dados = {
-        "nome": "",
-        "nome_fantasia": "",
-        "cnpj": "",
-        "email": "",
-        "telefone": "",
-    }
-
+    dados = {"nome": "", "nome_fantasia": "", "cnpj": "", "email": "", "telefone": ""}
     try:
         from pypdf import PdfReader
-
         arquivo.seek(0)
         reader = PdfReader(BytesIO(arquivo.read()))
-
         texto = ""
         for page in reader.pages:
             texto += page.extract_text() or ""
             texto += "\n"
-
     except Exception:
         return dados
 
     texto_sem_espacos = re.sub(r"\s+", "", texto)
-
     m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_sem_espacos)
     if m:
         dados["cnpj"] = formatar_cnpj(m.group())
@@ -177,7 +182,6 @@ def extrair_dados_cartao_cnpj_pdf(arquivo):
 
 def consultar_cnpj_publica_ws(cnpj):
     cnpj_limpo = limpar_cnpj(cnpj)
-
     if not cnpj_limpo or len(cnpj_limpo) != 14:
         return {}
 
@@ -217,10 +221,10 @@ def consultar_cnpj_publica_ws(cnpj):
             "nome_fantasia": est.get("nome_fantasia") or "",
             "cnpj": cnpj_limpo,
             "situacao_cadastral": est.get("situacao_cadastral") or "",
-            "data_abertura": est.get("data_inicio_atividade") or "",
+            "data_abertura": data_br(est.get("data_inicio_atividade") or ""),
             "porte": (data.get("porte") or {}).get("descricao") or "",
             "natureza_juridica": (data.get("natureza_juridica") or {}).get("descricao") or "",
-            "capital_social": data.get("capital_social") or "",
+            "capital_social": formatar_capital_social(data.get("capital_social") or ""),
             "cnae_principal": f"{atividade_principal.get('subclasse') or ''} - {atividade_principal.get('descricao') or ''}".strip(" -"),
             "cnaes_secundarios": "\n".join(cnaes_secundarios),
             "cep": est.get("cep") or "",
@@ -272,7 +276,6 @@ def limpar_cadastro_session():
     for key in list(st.session_state.keys()):
         if key.startswith("cad_"):
             del st.session_state[key]
-
     st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
 
 
@@ -297,7 +300,6 @@ def aplicar_dados_no_session(dados):
 
 def carregar_documento_cadastro(documento_empresa):
     nome_arquivo = getattr(documento_empresa, "name", "")
-
     cad_atual = st.session_state.get("cadastro_empresa") or modelo_cadastro_empresa()
 
     if cad_atual.get("documento_processado") and cad_atual.get("documento_nome") == nome_arquivo:
@@ -307,7 +309,6 @@ def carregar_documento_cadastro(documento_empresa):
 
     if dados_doc.get("cnpj"):
         dados_api = consultar_cnpj_publica_ws(dados_doc.get("cnpj"))
-
         if dados_api:
             for chave, valor in dados_api.items():
                 if valor not in [None, ""]:
@@ -377,7 +378,6 @@ def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
 
     conn = conectar()
     cur = conn.cursor()
-
     cnpj_limpo = limpar_cnpj(cnpj)
 
     cur.execute("""
@@ -397,7 +397,7 @@ def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
         "telefone": limpar_telefone(telefone),
         "senha_hash": hash_senha(senha),
         "situacao_cadastral": texto_padrao(dados_cadastrais.get("situacao_cadastral")),
-        "data_abertura": texto_padrao(dados_cadastrais.get("data_abertura")),
+        "data_abertura": data_iso(dados_cadastrais.get("data_abertura")),
         "porte": texto_padrao(dados_cadastrais.get("porte")),
         "natureza_juridica": texto_padrao(dados_cadastrais.get("natureza_juridica")),
         "capital_social": normalizar_capital_social(dados_cadastrais.get("capital_social")),
@@ -426,59 +426,22 @@ def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
 
         cur.execute("""
             UPDATE empresas
-            SET nome = ?,
-                nome_fantasia = ?,
-                cnpj_cpf = ?,
-                email = ?,
-                telefone = ?,
-                senha_hash = ?,
-                situacao_cadastral = ?,
-                data_abertura = ?,
-                porte = ?,
-                natureza_juridica = ?,
-                capital_social = ?,
-                cnae_principal = ?,
-                cnaes_secundarios = ?,
-                cep = ?,
-                logradouro = ?,
-                numero = ?,
-                complemento = ?,
-                bairro = ?,
-                municipio = ?,
-                uf = ?,
-                qsa = ?,
-                dados_cnpj_json = ?,
-                plano = COALESCE(plano, ?),
-                status_assinatura = 'Ativa',
-                periodo_assinatura = COALESCE(periodo_assinatura, ?),
+            SET nome = ?, nome_fantasia = ?, cnpj_cpf = ?, email = ?, telefone = ?, senha_hash = ?,
+                situacao_cadastral = ?, data_abertura = ?, porte = ?, natureza_juridica = ?,
+                capital_social = ?, cnae_principal = ?, cnaes_secundarios = ?, cep = ?,
+                logradouro = ?, numero = ?, complemento = ?, bairro = ?, municipio = ?, uf = ?,
+                qsa = ?, dados_cnpj_json = ?, plano = COALESCE(plano, ?),
+                status_assinatura = 'Ativa', periodo_assinatura = COALESCE(periodo_assinatura, ?),
                 atualizado_em = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (
-            valores["nome"],
-            valores["nome_fantasia"],
-            valores["cnpj_cpf"],
-            valores["email"],
-            valores["telefone"],
-            valores["senha_hash"],
-            valores["situacao_cadastral"],
-            valores["data_abertura"],
-            valores["porte"],
-            valores["natureza_juridica"],
-            valores["capital_social"],
-            valores["cnae_principal"],
-            valores["cnaes_secundarios"],
-            valores["cep"],
-            valores["logradouro"],
-            valores["numero"],
-            valores["complemento"],
-            valores["bairro"],
-            valores["municipio"],
-            valores["uf"],
-            valores["qsa"],
-            valores["dados_cnpj_json"],
-            valores["plano"],
-            valores["periodo_assinatura"],
-            empresa_id,
+            valores["nome"], valores["nome_fantasia"], valores["cnpj_cpf"], valores["email"],
+            valores["telefone"], valores["senha_hash"], valores["situacao_cadastral"],
+            valores["data_abertura"], valores["porte"], valores["natureza_juridica"],
+            valores["capital_social"], valores["cnae_principal"], valores["cnaes_secundarios"],
+            valores["cep"], valores["logradouro"], valores["numero"], valores["complemento"],
+            valores["bairro"], valores["municipio"], valores["uf"], valores["qsa"],
+            valores["dados_cnpj_json"], valores["plano"], valores["periodo_assinatura"], empresa_id
         ))
 
         conn.commit()
@@ -487,63 +450,25 @@ def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
 
     cur.execute("""
         INSERT INTO empresas (
-            nome,
-            nome_fantasia,
-            cnpj_cpf,
-            email,
-            telefone,
-            senha_hash,
-            situacao_cadastral,
-            data_abertura,
-            porte,
-            natureza_juridica,
-            capital_social,
-            cnae_principal,
-            cnaes_secundarios,
-            cep,
-            logradouro,
-            numero,
-            complemento,
-            bairro,
-            municipio,
-            uf,
-            qsa,
-            dados_cnpj_json,
-            plano,
-            status_assinatura,
-            periodo_assinatura
+            nome, nome_fantasia, cnpj_cpf, email, telefone, senha_hash,
+            situacao_cadastral, data_abertura, porte, natureza_juridica,
+            capital_social, cnae_principal, cnaes_secundarios, cep, logradouro,
+            numero, complemento, bairro, municipio, uf, qsa, dados_cnpj_json,
+            plano, status_assinatura, periodo_assinatura
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        valores["nome"],
-        valores["nome_fantasia"],
-        valores["cnpj_cpf"],
-        valores["email"],
-        valores["telefone"],
-        valores["senha_hash"],
-        valores["situacao_cadastral"],
-        valores["data_abertura"],
-        valores["porte"],
-        valores["natureza_juridica"],
-        valores["capital_social"],
-        valores["cnae_principal"],
-        valores["cnaes_secundarios"],
-        valores["cep"],
-        valores["logradouro"],
-        valores["numero"],
-        valores["complemento"],
-        valores["bairro"],
-        valores["municipio"],
-        valores["uf"],
-        valores["qsa"],
-        valores["dados_cnpj_json"],
-        valores["plano"],
-        valores["status_assinatura"],
-        valores["periodo_assinatura"],
+        valores["nome"], valores["nome_fantasia"], valores["cnpj_cpf"], valores["email"],
+        valores["telefone"], valores["senha_hash"], valores["situacao_cadastral"],
+        valores["data_abertura"], valores["porte"], valores["natureza_juridica"],
+        valores["capital_social"], valores["cnae_principal"], valores["cnaes_secundarios"],
+        valores["cep"], valores["logradouro"], valores["numero"], valores["complemento"],
+        valores["bairro"], valores["municipio"], valores["uf"], valores["qsa"],
+        valores["dados_cnpj_json"], valores["plano"], valores["status_assinatura"],
+        valores["periodo_assinatura"]
     ))
 
     empresa_id = cur.lastrowid
-
     conn.commit()
     conn.close()
     return True, "Conta criada. Entrando na GOIA.", empresa_id
@@ -551,7 +476,6 @@ def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
 
 def garantir_empresa_bootstrap():
     senha = os.environ.get("GOIA_BOOTSTRAP_PASSWORD", "").strip()
-
     if not senha:
         return
 
@@ -559,10 +483,7 @@ def garantir_empresa_bootstrap():
     nome = "GODS - PRODUTOS, SERVICOS & EVENTOS LTDA"
     email = os.environ.get("GOIA_BOOTSTRAP_EMAIL", "admin@gods.com.br").strip()
     telefone = os.environ.get("GOIA_BOOTSTRAP_TELEFONE", "61999878710").strip()
-
-    dados = {
-        "nome_fantasia": os.environ.get("GOIA_BOOTSTRAP_FANTASIA", "GODS").strip(),
-    }
+    dados = {"nome_fantasia": os.environ.get("GOIA_BOOTSTRAP_FANTASIA", "GODS").strip()}
 
     criar_empresa(nome, cnpj, email, telefone, senha, dados)
 
@@ -587,6 +508,13 @@ def suspender_testes_expirados():
         conn.close()
 
 
+def campo_readonly(label, value, key, area=False, height=100):
+    if area:
+        st.text_area(label, value=value or "", key=key, disabled=True, height=height)
+    else:
+        st.text_input(label, value=value or "", key=key, disabled=True)
+
+
 def tela_login():
     st.markdown("""
     <style>
@@ -607,6 +535,12 @@ def tela_login():
         color:#0f172a !important;
         font-weight:700 !important;
     }
+    .stTextInput input:disabled, textarea:disabled {
+        background:#f8fafc !important;
+        color:#0f172a !important;
+        -webkit-text-fill-color:#0f172a !important;
+        opacity:1 !important;
+    }
     .stButton button {
         background:#111827 !important;
         color:white !important;
@@ -626,7 +560,6 @@ def tela_login():
 
     with aba_login:
         st.subheader("Acessar sistema")
-
         with st.form("login"):
             cnpj = st.text_input("CNPJ")
             senha = st.text_input("Senha", type="password")
@@ -634,7 +567,6 @@ def tela_login():
 
         if acessar:
             empresa = buscar_empresa(cnpj, senha)
-
             if not empresa:
                 st.error("CNPJ ou senha inválidos.")
                 st.stop()
@@ -652,7 +584,7 @@ def tela_login():
 
 def tela_cadastro_empresa():
     st.subheader("Cadastrar empresa")
-    st.caption("Anexe o Cartão CNPJ oficial. A GOIA preencherá os dados e manterá suas edições durante a revisão.")
+    st.caption("Anexe o Cartão CNPJ oficial. A GOIA preencherá os dados oficiais. Apenas e-mail, telefone e senha ficam editáveis.")
 
     if "cadastro_empresa" not in st.session_state:
         st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
@@ -678,7 +610,6 @@ def tela_cadastro_empresa():
 
     if documento_empresa:
         valido = carregar_documento_cadastro(documento_empresa)
-
         if valido:
             st.success(f"Documento lido e cadastro enriquecido pela API CNPJ: {documento_empresa.name}")
         else:
@@ -698,45 +629,45 @@ def tela_cadastro_empresa():
             st.info("Este CNPJ já existe na base, mas ainda não possui senha. Complete o cadastro para ativar o acesso.")
 
     with st.container(border=True):
-        st.markdown("### Dados empresariais identificados")
+        st.markdown("### Dados oficiais identificados")
 
-        st.text_input("CNPJ", key="cad_cnpj", disabled=True)
-        st.text_input("Razão Social", key="cad_nome", disabled=not documento_valido)
+        campo_readonly("CNPJ", formatar_cnpj(cad.get("cnpj")), "view_cnpj")
+        campo_readonly("Razão Social", cad.get("nome"), "view_nome")
 
         c1, c2 = st.columns(2)
         with c1:
-            st.text_input("Nome Fantasia", key="cad_nome_fantasia")
-            st.text_input("Situação Cadastral", key="cad_situacao_cadastral")
-            st.text_input("Data de Abertura", key="cad_data_abertura")
-            st.text_input("Porte", key="cad_porte")
+            campo_readonly("Nome Fantasia", cad.get("nome_fantasia"), "view_nome_fantasia")
+            campo_readonly("Situação Cadastral", cad.get("situacao_cadastral"), "view_situacao_cadastral")
+            campo_readonly("Data de Abertura", data_br(cad.get("data_abertura")), "view_data_abertura")
+            campo_readonly("Porte", cad.get("porte"), "view_porte")
         with c2:
-            st.text_input("Natureza Jurídica", key="cad_natureza_juridica")
-            st.text_input("Capital Social", key="cad_capital_social")
-            st.text_input("CNAE Principal", key="cad_cnae_principal")
+            campo_readonly("Natureza Jurídica", cad.get("natureza_juridica"), "view_natureza_juridica")
+            campo_readonly("Capital Social", formatar_capital_social(cad.get("capital_social")), "view_capital_social")
+            campo_readonly("CNAE Principal", cad.get("cnae_principal"), "view_cnae_principal")
 
-        st.text_area("CNAEs Secundários", key="cad_cnaes_secundarios", height=120)
+        campo_readonly("CNAEs Secundários", cad.get("cnaes_secundarios"), "view_cnaes_secundarios", area=True, height=120)
 
-        st.markdown("### Endereço")
+        st.markdown("### Endereço oficial")
 
         e1, e2, e3 = st.columns([1, 2, 1])
         with e1:
-            st.text_input("CEP", key="cad_cep")
+            campo_readonly("CEP", cad.get("cep"), "view_cep")
         with e2:
-            st.text_input("Logradouro", key="cad_logradouro")
+            campo_readonly("Logradouro", cad.get("logradouro"), "view_logradouro")
         with e3:
-            st.text_input("Número", key="cad_numero")
+            campo_readonly("Número", cad.get("numero"), "view_numero")
 
         e4, e5, e6, e7 = st.columns([2, 2, 2, 1])
         with e4:
-            st.text_input("Complemento", key="cad_complemento")
+            campo_readonly("Complemento", cad.get("complemento"), "view_complemento")
         with e5:
-            st.text_input("Bairro", key="cad_bairro")
+            campo_readonly("Bairro", cad.get("bairro"), "view_bairro")
         with e6:
-            st.text_input("Município", key="cad_municipio")
+            campo_readonly("Município", cad.get("municipio"), "view_municipio")
         with e7:
-            st.text_input("UF", key="cad_uf")
+            campo_readonly("UF", cad.get("uf"), "view_uf")
 
-        st.text_area("Sócios / QSA", key="cad_qsa", height=120)
+        campo_readonly("Sócios / QSA", cad.get("qsa"), "view_qsa", area=True, height=120)
 
         st.markdown("### Acesso")
 
@@ -754,7 +685,6 @@ def tela_cadastro_empresa():
         confirmar = st.text_input("Confirmar senha", type="password", key="cad_confirmar")
 
         cad = sincronizar_cadastro_para_dict()
-
         valido, mensagem = validar_cadastro(cad, senha, confirmar, empresa_existente)
 
         if documento_valido and not valido:
