@@ -16,7 +16,19 @@ from utils.db import caminho_banco, conectar_banco
 from utils.schema import inicializar_schema_goia
 
 
+
 DB_PATH = caminho_banco()
+
+print("=" * 80)
+print("GOIA DATABASE DIAGNOSTIC")
+print("=" * 80)
+print("GOIA_DB_PATH:", os.getenv("GOIA_DB_PATH"))
+print("DB_PATH:", DB_PATH)
+print("DB_PATH exists:", DB_PATH.exists())
+print("DB_PATH parent exists:", DB_PATH.parent.exists())
+print("DB_PATH absolute:", DB_PATH.resolve())
+print("=" * 80)
+
 
 st.set_page_config(
     page_title="GOIA Finance Platform",
