@@ -289,7 +289,18 @@ def carregar_empresas():
             nome_fantasia,
             cnpj_cpf,
             email,
-            telefone,
+            CASE
+WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
+THEN
+substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
+|| " - "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
+|| " "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
+|| "-"
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
+ELSE telefone
+END AS telefone,
             senha_hash,
             situacao_cadastral,
             data_abertura,
@@ -310,6 +321,15 @@ def carregar_empresas():
             status_assinatura,
             periodo_assinatura,
             data_inicio_assinatura,
+CASE
+WHEN plano='Teste'
+AND (
+data_fim_assinatura IS NULL
+OR data_fim_assinatura=''
+)
+THEN date(data_inicio_assinatura,'+7 day')
+ELSE data_fim_assinatura
+END AS data_fim_assinatura,
             data_fim_assinatura,
             motivo_bloqueio,
             observacao_admin,
@@ -494,7 +514,18 @@ def dashboard_master(empresas):
         "nome_fantasia",
         "cnpj_cpf",
         "email",
-        "telefone",
+        "CASE
+WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
+THEN
+substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
+|| " - "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
+|| " "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
+|| "-"
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
+ELSE telefone
+END AS telefone",
         "plano",
         "status_assinatura",
         "criado_em",
@@ -512,7 +543,18 @@ def selecionar_empresa(empresas):
         st.info("Nenhum assinante cadastrado.")
         return None
 
-    busca = st.text_input("Buscar assinante por nome, CNPJ, e-mail, telefone ou status")
+    busca = st.text_input("Buscar assinante por nome, CNPJ, e-mail, CASE
+WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
+THEN
+substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
+|| " - "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
+|| " "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
+|| "-"
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
+ELSE telefone
+END AS telefone ou status")
 
     df = empresas.copy()
 
@@ -589,7 +631,29 @@ def ficha_contato_acesso(e):
     with c1:
         campo_info("E-mail", e.get("email"), "view_email")
     with c2:
-        campo_info("Telefone", e.get("telefone"), "view_telefone")
+        campo_info("Telefone", e.get("CASE
+WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
+THEN
+substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
+|| " - "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
+|| " "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
+|| "-"
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
+ELSE telefone
+END AS telefone"), "view_CASE
+WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
+THEN
+substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
+|| " - "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
+|| " "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
+|| "-"
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
+ELSE telefone
+END AS telefone")
     with c3:
         senha_status = "Configurada" if texto(e.get("senha_hash")) else "Não configurada"
         campo_info("Senha", senha_status, "view_senha_status")
@@ -635,7 +699,16 @@ def ficha_operacao(e):
 
     c4, c5 = st.columns(2)
     with c4:
-        campo_info("Início da assinatura", data_br(e.get("data_inicio_assinatura")), f"inicio_{e['id']}")
+        campo_info("Início da assinatura", data_br(e.get("data_inicio_assinatura,
+CASE
+WHEN plano='Teste'
+AND (
+data_fim_assinatura IS NULL
+OR data_fim_assinatura=''
+)
+THEN date(data_inicio_assinatura,'+7 day')
+ELSE data_fim_assinatura
+END AS data_fim_assinatura")), f"inicio_{e['id']}")
     with c5:
         data_fim = st.text_input("Fim da assinatura", value=data_br(e.get("data_fim_assinatura")), key=f"fim_{e['id']}")
 
@@ -739,7 +812,18 @@ def pagina_assinantes(empresas):
         <span class="goia-chip">{badge_status(empresa.get("status_assinatura"))}</span>
         <h2 style="margin:16px 0 4px 0;color:#0f172a;">{texto(empresa.get("nome"))}</h2>
         <p style="margin:0;color:#475569;font-weight:700;">
-            {formatar_cnpj(empresa.get("cnpj_cpf"))} · {texto(empresa.get("email"))} · {texto(empresa.get("telefone"))}
+            {formatar_cnpj(empresa.get("cnpj_cpf"))} · {texto(empresa.get("email"))} · {texto(empresa.get("CASE
+WHEN LENGTH(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""))>=11
+THEN
+substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),1,2)
+|| " - "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),3,1)
+|| " "
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),4,4)
+|| "-"
+|| substr(REPLACE(REPLACE(REPLACE(telefone,"(",""),")",""),"-",""),8,4)
+ELSE telefone
+END AS telefone"))}
         </p>
     </div>
     """, unsafe_allow_html=True)
