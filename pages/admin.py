@@ -1,6 +1,3 @@
-cd C:\Users\glaub\go-finance-ai
-
-$admin = @'
 import os
 import hashlib
 from datetime import datetime
@@ -837,13 +834,3 @@ elif pagina == "Auditoria":
     pagina_auditoria(empresas)
 
 st.caption("GOIA · Área Master da plataforma")
-'@
-
-$admin | Set-Content .\pages\admin.py -Encoding UTF8
-
-python -m py_compile .\pages\admin.py
-
-git status --short
-git add .\pages\admin.py
-git commit -m "Reestrutura Admin GOIA Control Center"
-git push
