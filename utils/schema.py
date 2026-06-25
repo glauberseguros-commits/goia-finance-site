@@ -6,16 +6,48 @@ from utils.db import conectar_banco
 SCHEMA = {
     "empresas": {
         "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+
+        # Identificação principal
         "nome": "TEXT NOT NULL",
         "nome_fantasia": "TEXT",
         "cnpj_cpf": "TEXT",
         "email": "TEXT",
         "telefone": "TEXT",
         "senha_hash": "TEXT",
+        "admin_nome": "TEXT",
+
+        # Dados Receita / CNPJ
+        "situacao_cadastral": "TEXT",
+        "data_abertura": "TEXT",
+        "porte": "TEXT",
+        "natureza_juridica": "TEXT",
+        "capital_social": "REAL DEFAULT 0",
+        "cnae_principal": "TEXT",
+        "cnaes_secundarios": "TEXT",
+        "qsa": "TEXT",
+        "dados_cnpj_json": "TEXT",
+
+        # Endereço
+        "cep": "TEXT",
+        "logradouro": "TEXT",
+        "numero": "TEXT",
+        "complemento": "TEXT",
+        "bairro": "TEXT",
+        "municipio": "TEXT",
+        "uf": "TEXT",
+
+        # Assinatura / controle comercial
         "plano": "TEXT DEFAULT 'Teste'",
         "status_assinatura": "TEXT DEFAULT 'Ativa'",
-        "admin_nome": "TEXT",
+        "periodo_assinatura": "TEXT DEFAULT '7 dias grátis'",
+        "data_inicio_assinatura": "TEXT DEFAULT CURRENT_TIMESTAMP",
+        "data_fim_assinatura": "TEXT",
+        "motivo_bloqueio": "TEXT",
+        "observacao_admin": "TEXT",
+
+        # Auditoria
         "criado_em": "TEXT DEFAULT CURRENT_TIMESTAMP",
+        "atualizado_em": "TEXT",
     },
 
     "clientes": {
@@ -397,15 +429,7 @@ def inicializar_schema_goia() -> None:
     garantir_repositorio_documental()
 
 
-
 def garantir_repositorio_documental():
-    """
-    Garante a estrutura mínima do Repositório Documental GOIA.
-
-    Regra da Arquitetura V1:
-    Todo arquivo enviado entra primeiro no repositório.
-    Depois pode ou não ser vinculado a entidade, processo, conta ou evidência.
-    """
     conn = conectar_banco()
     cur = conn.cursor()
 
@@ -471,4 +495,3 @@ def garantir_repositorio_documental():
 
     conn.commit()
     conn.close()
-

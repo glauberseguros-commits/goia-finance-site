@@ -1,19 +1,19 @@
-import sqlite3
 import json
 import urllib.request
-import urllib.error
 import os
 import hashlib
 import re
-from pathlib import Path
 from io import BytesIO
+
 import pandas as pd
 import streamlit as st
+
 from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero, kpi_card, section_title
 from utils.padronizadores import limpar_cnpj, limpar_telefone, telefone_valido, formatar_telefone
 from utils.db import caminho_banco, conectar_banco
 from utils.schema import inicializar_schema_goia
+
 
 DB_PATH = caminho_banco()
 
@@ -25,7 +25,6 @@ st.set_page_config(
 
 aplicar_estilo_premium()
 aplicar_premium_goia()
-
 
 st.markdown("""
 <style>
@@ -39,64 +38,46 @@ st.markdown("""
 def conectar():
     return conectar_banco()
 
-def limpar_doc(v):
-    return "".join(filter(str.isdigit, v or ""))
 
 def hash_senha(s):
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+    return hashlib.sha256(str(s).encode("utf-8")).hexdigest()
+
 
 def moeda(v):
     try:
         return f"R$ {float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except:
+    except Exception:
         return "R$ 0,00"
 
-def preparar_banco():
-    conn = conectar()
-    cur = conn.cursor()
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS empresas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL
-    )
-    """)
+def normalizar_capital_social(valor):
+    if valor is None:
+        return 0.0
 
-    cur.execute("PRAGMA table_info(empresas)")
-    cols = [c[1] for c in cur.fetchall()]
+    txt = str(valor).strip()
+    if not txt:
+        return 0.0
 
-    def add_col(nome, tipo):
-        if nome not in cols:
-            cur.execute(f"ALTER TABLE empresas ADD COLUMN {nome} {tipo}")
+    txt = txt.replace("R$", "").replace(" ", "")
 
-    add_col("cnpj_cpf", "TEXT")
-    add_col("email", "TEXT")
-    add_col("telefone", "TEXT")
-    add_col("senha_hash", "TEXT")
-    add_col("plano", "TEXT DEFAULT 'Teste'")
-    add_col("status_assinatura", "TEXT DEFAULT 'Ativa'")
-    add_col("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
+    if "," in txt:
+        txt = txt.replace(".", "").replace(",", ".")
 
-    # Normaliza CNPJs já existentes
-    cur.execute("SELECT id, cnpj_cpf FROM empresas")
-    for empresa_id, cnpj in cur.fetchall():
-        if cnpj:
-            cnpj_limpo = ''.join(filter(str.isdigit, cnpj))
-            if cnpj_limpo:
-                cur.execute(
-                    "UPDATE empresas SET cnpj_cpf = ? WHERE id = ?",
-                    (cnpj_limpo, empresa_id)
-                )
+    try:
+        return float(txt)
+    except Exception:
+        return 0.0
 
-    # Impede duas empresas com o mesmo CNPJ preenchido
-    cur.execute("""
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_empresas_cnpj_cpf_unico
-    ON empresas(cnpj_cpf)
-    WHERE cnpj_cpf IS NOT NULL AND cnpj_cpf <> ''
-    """)
 
-    conn.commit()
-    conn.close()
+def formatar_cnpj(valor):
+    numeros = re.sub(r"\D", "", valor or "")
+    if len(numeros) == 14:
+        return f"{numeros[:2]}.{numeros[2:5]}.{numeros[5:8]}/{numeros[8:12]}-{numeros[12:]}"
+    return valor or ""
+
+
+def texto_padrao(v):
+    return str(v or "").strip()
 
 
 def empresa_existe_por_cnpj(cnpj):
@@ -104,10 +85,10 @@ def empresa_existe_por_cnpj(cnpj):
     cur = conn.cursor()
 
     cur.execute("""
-    SELECT id, nome, senha_hash
-    FROM empresas
-    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
-    LIMIT 1
+        SELECT id, nome, senha_hash
+        FROM empresas
+        WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+        LIMIT 1
     """, (limpar_cnpj(cnpj),))
 
     row = cur.fetchone()
@@ -118,101 +99,69 @@ def empresa_existe_por_cnpj(cnpj):
 
     return None
 
+
 def buscar_empresa(cnpj, senha):
     conn = conectar()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = None
     cur = conn.cursor()
 
     cur.execute("""
-    SELECT id, nome, cnpj_cpf
-    FROM empresas
-    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
-      AND senha_hash = ?
-      AND COALESCE(status_assinatura, 'Ativa') = 'Ativa'
-    LIMIT 1
+        SELECT id, nome, cnpj_cpf
+        FROM empresas
+        WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+          AND senha_hash = ?
+          AND COALESCE(status_assinatura, 'Ativa') = 'Ativa'
+        LIMIT 1
     """, (limpar_cnpj(cnpj), hash_senha(senha)))
 
     row = cur.fetchone()
     conn.close()
-    return dict(row) if row else None
 
-def criar_empresa(nome, cnpj, email, telefone, senha):
-    conn = conectar()
-    cur = conn.cursor()
+    if not row:
+        return None
 
-    cnpj_limpo = limpar_cnpj(cnpj)
+    return {"id": row[0], "nome": row[1], "cnpj_cpf": row[2]}
 
-    cur.execute("""
-    SELECT id, senha_hash
-    FROM empresas
-    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
-    """, (cnpj_limpo,))
-
-    existente = cur.fetchone()
-
-    if existente:
-        empresa_id, senha_atual = existente
-
-        if senha_atual:
-            conn.close()
-            return False, "CNPJ já possui conta cadastrada.", None
-
-        cur.execute("""
-        UPDATE empresas
-        SET nome = ?, cnpj_cpf = ?, email = ?, telefone = ?, senha_hash = ?,
-            status_assinatura = COALESCE(status_assinatura, 'Ativa')
-        WHERE id = ?
-        """, (nome, cnpj_limpo, email, limpar_telefone(telefone), hash_senha(senha), empresa_id))
-
-        conn.commit()
-        conn.close()
-        return True, "Conta criada. Entrando na GOIA.", empresa_id
-
-    cur.execute("""
-    INSERT INTO empresas (
-        nome, cnpj_cpf, email, telefone, senha_hash, plano, status_assinatura
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        nome, cnpj_limpo, email, limpar_telefone(telefone), hash_senha(senha), "Teste", "Ativa"
-    ))
-
-    empresa_id = cur.lastrowid
-
-    conn.commit()
-    conn.close()
-    return True, "Conta criada. Entrando na GOIA.", empresa_id
-
-
-def formatar_cnpj(valor):
-    numeros = re.sub(r"\D", "", valor or "")
-    if len(numeros) == 14:
-        return f"{numeros[:2]}.{numeros[2:5]}.{numeros[5:8]}/{numeros[8:12]}-{numeros[12:]}"
-    return valor or ""
 
 def extrair_dados_cartao_cnpj_pdf(arquivo):
-    dados = {"nome": "", "cnpj": "", "email": "", "telefone": ""}
+    dados = {
+        "nome": "",
+        "nome_fantasia": "",
+        "cnpj": "",
+        "email": "",
+        "telefone": "",
+    }
 
     try:
         from pypdf import PdfReader
+
         arquivo.seek(0)
         reader = PdfReader(BytesIO(arquivo.read()))
+
         texto = ""
         for page in reader.pages:
             texto += page.extract_text() or ""
             texto += "\n"
+
     except Exception:
         return dados
 
     texto_sem_espacos = re.sub(r"\s+", "", texto)
+
     m = re.search(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}", texto_sem_espacos)
     if m:
         dados["cnpj"] = formatar_cnpj(m.group())
 
     linhas = [x.strip() for x in texto.splitlines() if x.strip()]
+
     for i, linha in enumerate(linhas):
         if "NOME EMPRESARIAL" in linha.upper() and i + 1 < len(linhas):
             dados["nome"] = linhas[i + 1].strip()
+            break
+
+    for i, linha in enumerate(linhas):
+        if "TÍTULO DO ESTABELECIMENTO" in linha.upper() and i + 1 < len(linhas):
+            dados["nome_fantasia"] = linhas[i + 1].strip()
             break
 
     email = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", texto)
@@ -224,529 +173,6 @@ def extrair_dados_cartao_cnpj_pdf(arquivo):
         dados["telefone"] = telefone.group()
 
     return dados
-
-
-
-def garantir_enriquecimento_cadastral():
-    conn = conectar()
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS clientes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER,
-            nome TEXT,
-            cnpj_cpf TEXT,
-            email TEXT,
-            telefone TEXT,
-            endereco TEXT,
-            cidade TEXT,
-            uf TEXT,
-            cep TEXT,
-            status TEXT DEFAULT 'Ativo',
-            origem_cadastro TEXT DEFAULT 'DOCUMENTO',
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS fornecedores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER,
-            nome TEXT,
-            cnpj TEXT,
-            cnpj_cpf TEXT,
-            email TEXT,
-            telefone TEXT,
-            endereco TEXT,
-            cidade TEXT,
-            uf TEXT,
-            cep TEXT,
-            categoria_padrao TEXT,
-            tipo_padrao TEXT,
-            status TEXT DEFAULT 'Ativo',
-            origem_cadastro TEXT DEFAULT 'DOCUMENTO',
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    campos_por_tabela = {
-        "clientes": [
-            ("empresa_id", "INTEGER"),
-            ("nome", "TEXT"),
-            ("cnpj_cpf", "TEXT"),
-            ("email", "TEXT"),
-            ("telefone", "TEXT"),
-            ("endereco", "TEXT"),
-            ("cidade", "TEXT"),
-            ("uf", "TEXT"),
-            ("cep", "TEXT"),
-            ("status", "TEXT DEFAULT 'Ativo'"),
-            ("origem_cadastro", "TEXT DEFAULT 'DOCUMENTO'"),
-            ("nome_fantasia", "TEXT"),
-            ("cnae_principal", "TEXT"),
-            ("natureza_juridica", "TEXT"),
-            ("capital_social", "REAL"),
-            ("situacao_cadastral", "TEXT")
-        ],
-        "fornecedores": [
-            ("empresa_id", "INTEGER"),
-            ("nome", "TEXT"),
-            ("cnpj", "TEXT"),
-            ("cnpj_cpf", "TEXT"),
-            ("email", "TEXT"),
-            ("telefone", "TEXT"),
-            ("endereco", "TEXT"),
-            ("cidade", "TEXT"),
-            ("uf", "TEXT"),
-            ("cep", "TEXT"),
-            ("categoria_padrao", "TEXT"),
-            ("tipo_padrao", "TEXT"),
-            ("status", "TEXT DEFAULT 'Ativo'"),
-            ("origem_cadastro", "TEXT DEFAULT 'DOCUMENTO'"),
-            ("nome_fantasia", "TEXT"),
-            ("cnae_principal", "TEXT"),
-            ("natureza_juridica", "TEXT"),
-            ("capital_social", "REAL"),
-            ("situacao_cadastral", "TEXT")
-        ]
-    }
-
-    for tabela, campos in campos_por_tabela.items():
-        cur.execute(f"PRAGMA table_info({tabela})")
-        existentes = [c[1] for c in cur.fetchall()]
-
-        for campo, tipo in campos:
-            if campo not in existentes:
-                cur.execute(f"ALTER TABLE {tabela} ADD COLUMN {campo} {tipo}")
-
-    conn.commit()
-    conn.close()
-
-
-
-def criar_pendencia_automatica(
-    empresa_id,
-    processo_id,
-    descricao,
-    tipo_evidencia="Evidencia documental",
-    documento_id=None,
-    proxima_acao=None
-):
-    conn = conectar()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT id
-        FROM processo_pendencias
-        WHERE empresa_id = ?
-          AND processo_id = ?
-          AND descricao = ?
-          AND COALESCE(status, 'Pendente') = 'Pendente'
-    """, (
-        empresa_id,
-        processo_id,
-        descricao
-    ))
-
-    existente = cur.fetchone()
-
-    if existente:
-        conn.close()
-        return existente[0]
-
-    cur.execute("""
-        INSERT INTO processo_pendencias (
-            empresa_id,
-            processo_id,
-            descricao,
-            tipo_evidencia,
-            documento_id,
-            proxima_acao,
-            status
-        )
-        VALUES (?, ?, ?, ?, ?, ?, 'Pendente')
-    """, (
-        empresa_id,
-        processo_id,
-        descricao,
-        tipo_evidencia,
-        documento_id,
-        proxima_acao
-    ))
-
-    pendencia_id = cur.lastrowid
-
-    conn.commit()
-    conn.close()
-
-    return pendencia_id
-
-
-
-def garantir_motor_encerramento():
-    conn = conectar()
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS contas_pagar (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER,
-            fornecedor_id INTEGER,
-            processo_id INTEGER,
-            documento_id INTEGER,
-            descricao TEXT,
-            categoria TEXT,
-            valor REAL DEFAULT 0,
-            data_emissao TEXT,
-            data_vencimento TEXT,
-            data_baixa TEXT,
-            valor_baixado REAL DEFAULT 0,
-            forma_pagamento TEXT,
-            observacao_baixa TEXT,
-            status TEXT DEFAULT 'Pendente',
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS processo_pendencias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER,
-            processo_id INTEGER,
-            documento_id INTEGER,
-            descricao TEXT,
-            tipo_evidencia TEXT,
-            proxima_acao TEXT,
-            status TEXT DEFAULT 'Pendente',
-            resolvido_em TEXT,
-            resolvido_por TEXT,
-            evidencia_resolucao_id INTEGER,
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    garantias = {
-        "contas_pagar": [
-            ("empresa_id", "INTEGER"),
-            ("fornecedor_id", "INTEGER"),
-            ("processo_id", "INTEGER"),
-            ("documento_id", "INTEGER"),
-            ("descricao", "TEXT"),
-            ("categoria", "TEXT"),
-            ("valor", "REAL DEFAULT 0"),
-            ("data_emissao", "TEXT"),
-            ("data_vencimento", "TEXT"),
-            ("data_baixa", "TEXT"),
-            ("valor_baixado", "REAL DEFAULT 0"),
-            ("forma_pagamento", "TEXT"),
-            ("observacao_baixa", "TEXT"),
-            ("status", "TEXT DEFAULT 'Pendente'"),
-            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
-        ],
-        "processo_pendencias": [
-            ("empresa_id", "INTEGER"),
-            ("processo_id", "INTEGER"),
-            ("documento_id", "INTEGER"),
-            ("descricao", "TEXT"),
-            ("tipo_evidencia", "TEXT"),
-            ("proxima_acao", "TEXT"),
-            ("status", "TEXT DEFAULT 'Pendente'"),
-            ("resolvido_em", "TEXT"),
-            ("resolvido_por", "TEXT"),
-            ("evidencia_resolucao_id", "INTEGER"),
-            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
-        ]
-    }
-
-    for tabela, campos in garantias.items():
-        cur.execute(f"PRAGMA table_info({tabela})")
-        existentes = [c[1] for c in cur.fetchall()]
-
-        for campo, tipo in campos:
-            if campo not in existentes:
-                cur.execute(f"ALTER TABLE {tabela} ADD COLUMN {campo} {tipo}")
-
-    conn.commit()
-    conn.close()
-
-
-
-def garantir_schema_documental():
-    """
-    Garante tabelas documentais mínimas no banco persistente.
-    Necessário no Render quando /data/gofinance.db existe, mas ainda não possui estrutura operacional.
-    """
-    conn = conectar()
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS documentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER,
-            processo_id INTEGER,
-            cliente_id INTEGER,
-            fornecedor_id INTEGER,
-            nome_arquivo TEXT,
-            tipo_documento TEXT,
-            classificacao TEXT,
-            direcao TEXT,
-            origem TEXT,
-            conteudo_texto TEXT,
-            chave_acesso_nfe TEXT,
-            numero_nfe TEXT,
-            serie_nfe TEXT,
-            cnpj_emitente TEXT,
-            nome_emitente TEXT,
-            cnpj_destinatario TEXT,
-            nome_destinatario TEXT,
-            contraparte_nome TEXT,
-            contraparte_documento TEXT,
-            data_documento TEXT,
-            data_emissao TEXT,
-            data_vencimento TEXT,
-            valor_total REAL DEFAULT 0,
-            valor REAL DEFAULT 0,
-            status TEXT DEFAULT 'Importado',
-            status_processamento TEXT DEFAULT 'Processado',
-            erro_processamento TEXT,
-            processado_em TEXT,
-            hash_arquivo TEXT,
-            caminho_arquivo TEXT,
-            extensao TEXT,
-            tamanho_bytes INTEGER,
-            observacao TEXT,
-            diagnostico_tecnico TEXT,
-            dados_extraidos_json TEXT,
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS processos_documentais (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER,
-            titulo TEXT,
-            descricao TEXT,
-            tipo_processo TEXT,
-            status TEXT DEFAULT 'Aberto',
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP,
-            atualizado_em TEXT
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS processo_documentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER,
-            processo_id INTEGER,
-            documento_id INTEGER,
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS evidencias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER,
-            processo_id INTEGER,
-            documento_id INTEGER,
-            tipo_evidencia TEXT,
-            descricao TEXT,
-            valor TEXT,
-            status TEXT DEFAULT 'Ativa',
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS processo_evidencias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            empresa_id INTEGER,
-            processo_id INTEGER,
-            documento_id INTEGER,
-            evidencia_id INTEGER,
-            tipo_evidencia TEXT,
-            descricao TEXT,
-            valor TEXT,
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    garantias = {
-        "documentos": [
-            ("empresa_id", "INTEGER"),
-            ("processo_id", "INTEGER"),
-            ("cliente_id", "INTEGER"),
-            ("fornecedor_id", "INTEGER"),
-            ("nome_arquivo", "TEXT"),
-            ("tipo_documento", "TEXT"),
-            ("classificacao", "TEXT"),
-            ("direcao", "TEXT"),
-            ("origem", "TEXT"),
-            ("conteudo_texto", "TEXT"),
-            ("chave_acesso_nfe", "TEXT"),
-            ("numero_nfe", "TEXT"),
-            ("serie_nfe", "TEXT"),
-            ("cnpj_emitente", "TEXT"),
-            ("nome_emitente", "TEXT"),
-            ("cnpj_destinatario", "TEXT"),
-            ("nome_destinatario", "TEXT"),
-            ("contraparte_nome", "TEXT"),
-            ("contraparte_documento", "TEXT"),
-            ("data_documento", "TEXT"),
-            ("data_emissao", "TEXT"),
-            ("data_vencimento", "TEXT"),
-            ("valor_total", "REAL DEFAULT 0"),
-            ("valor", "REAL DEFAULT 0"),
-            ("status", "TEXT DEFAULT 'Importado'"),
-            ("status_processamento", "TEXT DEFAULT 'Processado'"),
-            ("erro_processamento", "TEXT"),
-            ("processado_em", "TEXT"),
-            ("hash_arquivo", "TEXT"),
-            ("caminho_arquivo", "TEXT"),
-            ("extensao", "TEXT"),
-            ("tamanho_bytes", "INTEGER"),
-            ("observacao", "TEXT"),
-            ("diagnostico_tecnico", "TEXT"),
-            ("dados_extraidos_json", "TEXT"),
-            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
-        ],
-        "processos_documentais": [
-            ("empresa_id", "INTEGER"),
-            ("titulo", "TEXT"),
-            ("descricao", "TEXT"),
-            ("tipo_processo", "TEXT"),
-            ("status", "TEXT DEFAULT 'Aberto'"),
-            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP"),
-            ("atualizado_em", "TEXT")
-        ],
-        "processo_documentos": [
-            ("empresa_id", "INTEGER"),
-            ("processo_id", "INTEGER"),
-            ("documento_id", "INTEGER"),
-            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
-        ],
-        "evidencias": [
-            ("empresa_id", "INTEGER"),
-            ("processo_id", "INTEGER"),
-            ("documento_id", "INTEGER"),
-            ("tipo_evidencia", "TEXT"),
-            ("descricao", "TEXT"),
-            ("valor", "TEXT"),
-            ("status", "TEXT DEFAULT 'Ativa'"),
-            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
-        ],
-        "processo_evidencias": [
-            ("empresa_id", "INTEGER"),
-            ("processo_id", "INTEGER"),
-            ("documento_id", "INTEGER"),
-            ("evidencia_id", "INTEGER"),
-            ("tipo_evidencia", "TEXT"),
-            ("descricao", "TEXT"),
-            ("valor", "TEXT"),
-            ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
-        ]
-    }
-
-    for tabela, campos in garantias.items():
-        cur.execute(f"PRAGMA table_info({tabela})")
-        existentes = [c[1] for c in cur.fetchall()]
-
-        for campo, tipo in campos:
-            if campo not in existentes:
-                cur.execute(f"ALTER TABLE {tabela} ADD COLUMN {campo} {tipo}")
-
-    conn.commit()
-    conn.close()
-
-
-
-def garantir_empresa_bootstrap():
-    """
-    Cria ou atualiza a empresa GODS no banco persistente do Render usando senha via variável de ambiente.
-    Não deixa senha hardcoded no código.
-    """
-    senha = os.environ.get("GOIA_BOOTSTRAP_PASSWORD", "").strip()
-
-    if not senha:
-        return
-
-    cnpj = "28860122000177"
-    nome = "GODS - PRODUTOS, SERVICOS & EVENTOS LTDA"
-    email = os.environ.get("GOIA_BOOTSTRAP_EMAIL", "admin@gods.com.br").strip()
-    telefone = os.environ.get("GOIA_BOOTSTRAP_TELEFONE", "61999878710").strip()
-
-    conn = conectar()
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS empresas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            cnpj_cpf TEXT,
-            email TEXT,
-            telefone TEXT,
-            senha_hash TEXT,
-            plano TEXT DEFAULT 'Teste',
-            status_assinatura TEXT DEFAULT 'Ativa',
-            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
-    cur.execute("PRAGMA table_info(empresas)")
-    existentes = [c[1] for c in cur.fetchall()]
-
-    campos = [
-        ("cnpj_cpf", "TEXT"),
-        ("email", "TEXT"),
-        ("telefone", "TEXT"),
-        ("senha_hash", "TEXT"),
-        ("plano", "TEXT DEFAULT 'Teste'"),
-        ("status_assinatura", "TEXT DEFAULT 'Ativa'"),
-        ("criado_em", "TEXT DEFAULT CURRENT_TIMESTAMP")
-    ]
-
-    for campo, tipo in campos:
-        if campo not in existentes:
-            cur.execute(f"ALTER TABLE empresas ADD COLUMN {campo} {tipo}")
-
-    senha_hash = hash_senha(senha)
-
-    cur.execute("""
-        SELECT id
-        FROM empresas
-        WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
-        LIMIT 1
-    """, (cnpj,))
-
-    row = cur.fetchone()
-
-    if row:
-        empresa_id = row[0]
-        cur.execute("""
-            UPDATE empresas
-            SET nome = ?,
-                cnpj_cpf = ?,
-                email = ?,
-                telefone = ?,
-                senha_hash = ?,
-                plano = COALESCE(plano, 'Teste'),
-                status_assinatura = 'Ativa'
-            WHERE id = ?
-        """, (nome, cnpj, email, telefone, senha_hash, empresa_id))
-    else:
-        cur.execute("""
-            INSERT INTO empresas (
-                nome, cnpj_cpf, email, telefone, senha_hash, plano, status_assinatura
-            )
-            VALUES (?, ?, ?, ?, ?, 'Teste', 'Ativa')
-        """, (nome, cnpj, email, telefone, senha_hash))
-
-    conn.commit()
-    conn.close()
-
-
 
 
 def consultar_cnpj_publica_ws(cnpj):
@@ -762,7 +188,8 @@ def consultar_cnpj_publica_ws(cnpj):
         )
 
         with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+            bruto = resp.read().decode("utf-8")
+            data = json.loads(bruto)
 
         est = data.get("estabelecimento") or {}
         cidade = est.get("cidade") or {}
@@ -806,10 +233,338 @@ def consultar_cnpj_publica_ws(cnpj):
             "email": est.get("email") or "",
             "telefone": f"{est.get('ddd1') or ''}{est.get('telefone1') or ''}",
             "qsa": "\n".join(qsa),
+            "dados_cnpj_json": json.dumps(data, ensure_ascii=False),
         }
 
     except Exception:
         return {}
+
+
+def modelo_cadastro_empresa():
+    return {
+        "nome": "",
+        "nome_fantasia": "",
+        "cnpj": "",
+        "situacao_cadastral": "",
+        "data_abertura": "",
+        "porte": "",
+        "natureza_juridica": "",
+        "capital_social": "",
+        "cnae_principal": "",
+        "cnaes_secundarios": "",
+        "cep": "",
+        "logradouro": "",
+        "numero": "",
+        "complemento": "",
+        "bairro": "",
+        "municipio": "",
+        "uf": "",
+        "qsa": "",
+        "email": "",
+        "telefone": "",
+        "dados_cnpj_json": "",
+        "documento_nome": "",
+        "documento_processado": False,
+    }
+
+
+def limpar_cadastro_session():
+    for key in list(st.session_state.keys()):
+        if key.startswith("cad_"):
+            del st.session_state[key]
+
+    st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
+
+
+def aplicar_dados_no_session(dados):
+    if "cadastro_empresa" not in st.session_state:
+        st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
+
+    cad = st.session_state["cadastro_empresa"]
+
+    for chave, valor in dados.items():
+        if valor not in [None, ""]:
+            cad[chave] = valor
+
+    for chave, valor in cad.items():
+        widget_key = f"cad_{chave}"
+        if widget_key not in st.session_state:
+            if chave == "telefone":
+                st.session_state[widget_key] = formatar_telefone(valor)
+            else:
+                st.session_state[widget_key] = "" if valor is None else str(valor)
+
+
+def carregar_documento_cadastro(documento_empresa):
+    nome_arquivo = getattr(documento_empresa, "name", "")
+
+    cad_atual = st.session_state.get("cadastro_empresa") or modelo_cadastro_empresa()
+
+    if cad_atual.get("documento_processado") and cad_atual.get("documento_nome") == nome_arquivo:
+        return True
+
+    dados_doc = extrair_dados_cartao_cnpj_pdf(documento_empresa)
+
+    if dados_doc.get("cnpj"):
+        dados_api = consultar_cnpj_publica_ws(dados_doc.get("cnpj"))
+
+        if dados_api:
+            for chave, valor in dados_api.items():
+                if valor not in [None, ""]:
+                    dados_doc[chave] = valor
+
+    dados_doc["documento_nome"] = nome_arquivo
+    dados_doc["documento_processado"] = True
+
+    st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
+    aplicar_dados_no_session(dados_doc)
+
+    return bool(dados_doc.get("nome")) and bool(dados_doc.get("cnpj"))
+
+
+def sincronizar_cadastro_para_dict():
+    if "cadastro_empresa" not in st.session_state:
+        st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
+
+    cad = st.session_state["cadastro_empresa"]
+
+    for chave in list(cad.keys()):
+        widget_key = f"cad_{chave}"
+        if widget_key in st.session_state:
+            cad[chave] = st.session_state[widget_key]
+
+    return cad
+
+
+def validar_cadastro(cad, senha, confirmar, empresa_existente):
+    obrigatorios = {
+        "Razão Social": cad.get("nome"),
+        "CNPJ": cad.get("cnpj"),
+        "Nome Fantasia": cad.get("nome_fantasia"),
+        "Situação Cadastral": cad.get("situacao_cadastral"),
+        "Natureza Jurídica": cad.get("natureza_juridica"),
+        "Capital Social": cad.get("capital_social"),
+        "CEP": cad.get("cep"),
+        "Logradouro": cad.get("logradouro"),
+        "Bairro": cad.get("bairro"),
+        "Município": cad.get("municipio"),
+        "UF": cad.get("uf"),
+        "E-mail": cad.get("email"),
+        "Telefone": cad.get("telefone"),
+        "Senha": senha,
+        "Confirmar senha": confirmar,
+    }
+
+    faltantes = [campo for campo, valor in obrigatorios.items() if not texto_padrao(valor)]
+
+    if faltantes:
+        return False, "Campos obrigatórios pendentes: " + ", ".join(faltantes)
+
+    if empresa_existente is not None and empresa_existente.get("senha_hash"):
+        return False, "Este CNPJ já possui conta cadastrada."
+
+    if senha != confirmar:
+        return False, "As senhas não conferem."
+
+    if not telefone_valido(cad.get("telefone")):
+        return False, "Telefone inválido. Informe DDD + número. Exemplo: (61) 99987-8710."
+
+    return True, ""
+
+
+def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
+    dados_cadastrais = dados_cadastrais or {}
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    cnpj_limpo = limpar_cnpj(cnpj)
+
+    cur.execute("""
+        SELECT id, senha_hash
+        FROM empresas
+        WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+        LIMIT 1
+    """, (cnpj_limpo,))
+
+    existente = cur.fetchone()
+
+    valores = {
+        "nome": texto_padrao(nome),
+        "nome_fantasia": texto_padrao(dados_cadastrais.get("nome_fantasia")),
+        "cnpj_cpf": cnpj_limpo,
+        "email": texto_padrao(email),
+        "telefone": limpar_telefone(telefone),
+        "senha_hash": hash_senha(senha),
+        "situacao_cadastral": texto_padrao(dados_cadastrais.get("situacao_cadastral")),
+        "data_abertura": texto_padrao(dados_cadastrais.get("data_abertura")),
+        "porte": texto_padrao(dados_cadastrais.get("porte")),
+        "natureza_juridica": texto_padrao(dados_cadastrais.get("natureza_juridica")),
+        "capital_social": normalizar_capital_social(dados_cadastrais.get("capital_social")),
+        "cnae_principal": texto_padrao(dados_cadastrais.get("cnae_principal")),
+        "cnaes_secundarios": texto_padrao(dados_cadastrais.get("cnaes_secundarios")),
+        "cep": texto_padrao(dados_cadastrais.get("cep")),
+        "logradouro": texto_padrao(dados_cadastrais.get("logradouro")),
+        "numero": texto_padrao(dados_cadastrais.get("numero")),
+        "complemento": texto_padrao(dados_cadastrais.get("complemento")),
+        "bairro": texto_padrao(dados_cadastrais.get("bairro")),
+        "municipio": texto_padrao(dados_cadastrais.get("municipio")),
+        "uf": texto_padrao(dados_cadastrais.get("uf")).upper(),
+        "qsa": texto_padrao(dados_cadastrais.get("qsa")),
+        "dados_cnpj_json": texto_padrao(dados_cadastrais.get("dados_cnpj_json")),
+        "plano": "Teste",
+        "status_assinatura": "Ativa",
+        "periodo_assinatura": "7 dias grátis",
+    }
+
+    if existente:
+        empresa_id, senha_atual = existente
+
+        if senha_atual:
+            conn.close()
+            return False, "CNPJ já possui conta cadastrada.", None
+
+        cur.execute("""
+            UPDATE empresas
+            SET nome = ?,
+                nome_fantasia = ?,
+                cnpj_cpf = ?,
+                email = ?,
+                telefone = ?,
+                senha_hash = ?,
+                situacao_cadastral = ?,
+                data_abertura = ?,
+                porte = ?,
+                natureza_juridica = ?,
+                capital_social = ?,
+                cnae_principal = ?,
+                cnaes_secundarios = ?,
+                cep = ?,
+                logradouro = ?,
+                numero = ?,
+                complemento = ?,
+                bairro = ?,
+                municipio = ?,
+                uf = ?,
+                qsa = ?,
+                dados_cnpj_json = ?,
+                plano = COALESCE(plano, ?),
+                status_assinatura = 'Ativa',
+                periodo_assinatura = COALESCE(periodo_assinatura, ?),
+                atualizado_em = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (
+            valores["nome"],
+            valores["nome_fantasia"],
+            valores["cnpj_cpf"],
+            valores["email"],
+            valores["telefone"],
+            valores["senha_hash"],
+            valores["situacao_cadastral"],
+            valores["data_abertura"],
+            valores["porte"],
+            valores["natureza_juridica"],
+            valores["capital_social"],
+            valores["cnae_principal"],
+            valores["cnaes_secundarios"],
+            valores["cep"],
+            valores["logradouro"],
+            valores["numero"],
+            valores["complemento"],
+            valores["bairro"],
+            valores["municipio"],
+            valores["uf"],
+            valores["qsa"],
+            valores["dados_cnpj_json"],
+            valores["plano"],
+            valores["periodo_assinatura"],
+            empresa_id,
+        ))
+
+        conn.commit()
+        conn.close()
+        return True, "Conta criada. Entrando na GOIA.", empresa_id
+
+    cur.execute("""
+        INSERT INTO empresas (
+            nome,
+            nome_fantasia,
+            cnpj_cpf,
+            email,
+            telefone,
+            senha_hash,
+            situacao_cadastral,
+            data_abertura,
+            porte,
+            natureza_juridica,
+            capital_social,
+            cnae_principal,
+            cnaes_secundarios,
+            cep,
+            logradouro,
+            numero,
+            complemento,
+            bairro,
+            municipio,
+            uf,
+            qsa,
+            dados_cnpj_json,
+            plano,
+            status_assinatura,
+            periodo_assinatura
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        valores["nome"],
+        valores["nome_fantasia"],
+        valores["cnpj_cpf"],
+        valores["email"],
+        valores["telefone"],
+        valores["senha_hash"],
+        valores["situacao_cadastral"],
+        valores["data_abertura"],
+        valores["porte"],
+        valores["natureza_juridica"],
+        valores["capital_social"],
+        valores["cnae_principal"],
+        valores["cnaes_secundarios"],
+        valores["cep"],
+        valores["logradouro"],
+        valores["numero"],
+        valores["complemento"],
+        valores["bairro"],
+        valores["municipio"],
+        valores["uf"],
+        valores["qsa"],
+        valores["dados_cnpj_json"],
+        valores["plano"],
+        valores["status_assinatura"],
+        valores["periodo_assinatura"],
+    ))
+
+    empresa_id = cur.lastrowid
+
+    conn.commit()
+    conn.close()
+    return True, "Conta criada. Entrando na GOIA.", empresa_id
+
+
+def garantir_empresa_bootstrap():
+    senha = os.environ.get("GOIA_BOOTSTRAP_PASSWORD", "").strip()
+
+    if not senha:
+        return
+
+    cnpj = "28860122000177"
+    nome = "GODS - PRODUTOS, SERVICOS & EVENTOS LTDA"
+    email = os.environ.get("GOIA_BOOTSTRAP_EMAIL", "admin@gods.com.br").strip()
+    telefone = os.environ.get("GOIA_BOOTSTRAP_TELEFONE", "61999878710").strip()
+
+    dados = {
+        "nome_fantasia": os.environ.get("GOIA_BOOTSTRAP_FANTASIA", "GODS").strip(),
+    }
+
+    criar_empresa(nome, cnpj, email, telefone, senha, dados)
 
 
 def suspender_testes_expirados():
@@ -871,6 +626,7 @@ def tela_login():
 
     with aba_login:
         st.subheader("Acessar sistema")
+
         with st.form("login"):
             cnpj = st.text_input("CNPJ")
             senha = st.text_input("Senha", type="password")
@@ -878,6 +634,7 @@ def tela_login():
 
         if acessar:
             empresa = buscar_empresa(cnpj, senha)
+
             if not empresa:
                 st.error("CNPJ ou senha inválidos.")
                 st.stop()
@@ -888,199 +645,180 @@ def tela_login():
             st.rerun()
 
     with aba_cadastro:
-        st.subheader("Cadastrar empresa")
+        tela_cadastro_empresa()
 
-        st.caption("Primeiro anexe o Cartão CNPJ oficial. A GOIA preencherá Razão Social e CNPJ a partir do documento.")
+    st.stop()
 
+
+def tela_cadastro_empresa():
+    st.subheader("Cadastrar empresa")
+    st.caption("Anexe o Cartão CNPJ oficial. A GOIA preencherá os dados e manterá suas edições durante a revisão.")
+
+    if "cadastro_empresa" not in st.session_state:
+        st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
+
+    col_upload, col_acao = st.columns([3, 1])
+
+    with col_upload:
         documento_empresa = st.file_uploader(
             "Anexar Cartão CNPJ / documento oficial da empresa",
             type=["pdf"],
             key="documento_cadastro_empresa"
         )
 
-        dados_doc = {"nome": "", "cnpj": "", "email": "", "telefone": ""}
+    with col_acao:
+        st.write("")
+        st.write("")
+        if st.button("Limpar cadastro", use_container_width=True):
+            limpar_cadastro_session()
+            st.rerun()
 
-        if not documento_empresa:
-            st.warning("Anexe o Cartão CNPJ para liberar o cadastro.")
+    if not documento_empresa and not st.session_state["cadastro_empresa"].get("documento_processado"):
+        st.warning("Anexe o Cartão CNPJ para liberar o cadastro.")
+
+    if documento_empresa:
+        valido = carregar_documento_cadastro(documento_empresa)
+
+        if valido:
+            st.success(f"Documento lido e cadastro enriquecido pela API CNPJ: {documento_empresa.name}")
         else:
-            dados_doc = extrair_dados_cartao_cnpj_pdf(documento_empresa)
+            st.error("Documento anexado, mas não foi possível identificar Razão Social e CNPJ. Envie o Cartão CNPJ oficial em PDF.")
 
-            if dados_doc.get("cnpj"):
-                dados_api = consultar_cnpj_publica_ws(dados_doc.get("cnpj"))
+    cad = sincronizar_cadastro_para_dict()
 
-                if dados_api:
-                    for chave, valor in dados_api.items():
-                        if valor not in [None, ""]:
-                            dados_doc[chave] = valor
+    documento_valido = bool(texto_padrao(cad.get("nome"))) and bool(texto_padrao(cad.get("cnpj")))
 
-            if dados_doc.get("nome") and dados_doc.get("cnpj"):
-                st.success(f"Documento lido e cadastro enriquecido pela API CNPJ: {documento_empresa.name}")
-            else:
-                st.error("Documento anexado, mas não foi possível identificar Razão Social e CNPJ. Envie o Cartão CNPJ oficial em PDF.")
+    empresa_existente = None
+    if documento_valido:
+        empresa_existente = empresa_existe_por_cnpj(cad.get("cnpj"))
 
-        documento_valido = bool(dados_doc.get("nome")) and bool(dados_doc.get("cnpj"))
+        if empresa_existente and empresa_existente.get("senha_hash"):
+            st.warning("Este CNPJ já possui conta cadastrada na GOIA. Use a aba 'Já tenho conta' para acessar.")
+        elif empresa_existente and not empresa_existente.get("senha_hash"):
+            st.info("Este CNPJ já existe na base, mas ainda não possui senha. Complete o cadastro para ativar o acesso.")
 
-        nome_oficial = dados_doc.get("nome", "")
-        cnpj_oficial = dados_doc.get("cnpj", "")
+    with st.container(border=True):
+        st.markdown("### Dados empresariais identificados")
 
-        empresa_existente = None
-        if documento_valido:
-            empresa_existente = empresa_existe_por_cnpj(cnpj_oficial)
+        st.text_input("CNPJ", key="cad_cnpj", disabled=True)
+        st.text_input("Razão Social", key="cad_nome", disabled=not documento_valido)
 
-            if empresa_existente and empresa_existente.get("senha_hash"):
-                st.warning(
-                    "Este CNPJ já possui conta cadastrada na GOIA. "
-                    "Use a aba 'Já tenho conta' para acessar."
-                )
-            elif empresa_existente and not empresa_existente.get("senha_hash"):
-                st.info(
-                    "Este CNPJ já existe na base, mas ainda não possui senha. "
-                    "Complete o cadastro para ativar o acesso."
-                )
+        c1, c2 = st.columns(2)
+        with c1:
+            st.text_input("Nome Fantasia", key="cad_nome_fantasia")
+            st.text_input("Situação Cadastral", key="cad_situacao_cadastral")
+            st.text_input("Data de Abertura", key="cad_data_abertura")
+            st.text_input("Porte", key="cad_porte")
+        with c2:
+            st.text_input("Natureza Jurídica", key="cad_natureza_juridica")
+            st.text_input("Capital Social", key="cad_capital_social")
+            st.text_input("CNAE Principal", key="cad_cnae_principal")
 
-        with st.container(border=True):
-            st.markdown("### Dados empresariais identificados")
+        st.text_area("CNAEs Secundários", key="cad_cnaes_secundarios", height=120)
 
-            cnpj_oficial = st.text_input(
-                "CNPJ",
-                value=cnpj_oficial,
-                disabled=True
-            )
+        st.markdown("### Endereço")
 
-            nome_oficial = st.text_input(
-                "Razão Social",
-                value=nome_oficial,
-                disabled=not documento_valido
-            )
+        e1, e2, e3 = st.columns([1, 2, 1])
+        with e1:
+            st.text_input("CEP", key="cad_cep")
+        with e2:
+            st.text_input("Logradouro", key="cad_logradouro")
+        with e3:
+            st.text_input("Número", key="cad_numero")
 
-            nome_fantasia = st.text_input("Nome Fantasia", value=(dados_doc.get("nome_fantasia") or ""))
-            situacao_cadastral = st.text_input("Situação Cadastral", value=(dados_doc.get("situacao_cadastral") or dados_doc.get("situacao") or ""))
-            data_abertura = st.text_input("Data de Abertura", value=(dados_doc.get("data_abertura") or dados_doc.get("abertura") or ""))
-            porte = st.text_input("Porte", value=(dados_doc.get("porte") or ""))
-            natureza_juridica = st.text_input("Natureza Jurídica", value=(dados_doc.get("natureza_juridica") or ""))
-            capital_social = st.text_input("Capital Social", value=str(dados_doc.get("capital_social") or ""))
+        e4, e5, e6, e7 = st.columns([2, 2, 2, 1])
+        with e4:
+            st.text_input("Complemento", key="cad_complemento")
+        with e5:
+            st.text_input("Bairro", key="cad_bairro")
+        with e6:
+            st.text_input("Município", key="cad_municipio")
+        with e7:
+            st.text_input("UF", key="cad_uf")
 
-            cnae_principal = st.text_input("CNAE Principal", value=(dados_doc.get("cnae_principal") or dados_doc.get("cnae") or ""))
-            cnaes_secundarios = st.text_area("CNAEs Secundários", value=str(dados_doc.get("cnaes_secundarios") or ""))
+        st.text_area("Sócios / QSA", key="cad_qsa", height=120)
 
-            st.markdown("### Endereço")
-            cep = st.text_input("CEP", value=(dados_doc.get("cep") or ""))
-            logradouro = st.text_input("Logradouro", value=(dados_doc.get("logradouro") or dados_doc.get("endereco") or ""))
-            numero = st.text_input("Número", value=(dados_doc.get("numero") or ""))
-            complemento = st.text_input("Complemento", value=(dados_doc.get("complemento") or ""))
-            bairro = st.text_input("Bairro", value=(dados_doc.get("bairro") or ""))
-            municipio = st.text_input("Município", value=(dados_doc.get("municipio") or dados_doc.get("cidade") or ""))
-            uf = st.text_input("UF", value=(dados_doc.get("uf") or ""))
+        st.markdown("### Acesso")
 
-            qsa = st.text_area("Sócios / QSA", value=str(dados_doc.get("qsa") or dados_doc.get("socios") or ""))
-
-            st.markdown("### Acesso")
-            email = st.text_input("E-mail de acesso", value=(dados_doc.get("email") or ""))
-            telefone = st.text_input(
+        a1, a2 = st.columns(2)
+        with a1:
+            st.text_input("E-mail de acesso", key="cad_email")
+        with a2:
+            st.text_input(
                 "Telefone / WhatsApp",
-                value=formatar_telefone(dados_doc.get("telefone") or ""),
+                key="cad_telefone",
                 help="Digite DDD + número. Exemplo: (61) 99987-8710"
             )
-            senha = st.text_input("Senha", type="password")
-            confirmar = st.text_input("Confirmar senha", type="password")
 
-            bloquear_cadastro = False
+        senha = st.text_input("Senha", type="password", key="cad_senha")
+        confirmar = st.text_input("Confirmar senha", type="password", key="cad_confirmar")
 
-            if not documento_valido:
-                bloquear_cadastro = True
+        cad = sincronizar_cadastro_para_dict()
 
-            if empresa_existente is not None and bool(empresa_existente.get("senha_hash")):
-                bloquear_cadastro = True
+        valido, mensagem = validar_cadastro(cad, senha, confirmar, empresa_existente)
 
-            campos_obrigatorios_ok = all([
-                nome_oficial.strip(),
-                cnpj_oficial.strip(),
-                nome_fantasia.strip(),
-                situacao_cadastral.strip(),
-                natureza_juridica.strip(),
-                capital_social.strip(),
-                cep.strip(),
-                logradouro.strip(),
-                bairro.strip(),
-                municipio.strip(),
-                uf.strip(),
-                email.strip(),
-                telefone.strip(),
-                senha.strip(),
-                confirmar.strip(),
-            ])
+        if documento_valido and not valido:
+            st.warning(mensagem)
 
-            if documento_valido and not campos_obrigatorios_ok:
-                st.warning("Preencha todos os campos obrigatórios antes de criar a conta.")
+        criar = st.button(
+            "Criar conta",
+            disabled=bool((not documento_valido) or (not valido)),
+            use_container_width=True
+        )
 
-            criar = st.button(
-                "Criar conta",
-                disabled=bool(bloquear_cadastro or not campos_obrigatorios_ok)
-            )
+    if criar:
+        dados_cadastrais = {
+            "nome_fantasia": cad.get("nome_fantasia"),
+            "situacao_cadastral": cad.get("situacao_cadastral"),
+            "data_abertura": cad.get("data_abertura"),
+            "porte": cad.get("porte"),
+            "natureza_juridica": cad.get("natureza_juridica"),
+            "capital_social": cad.get("capital_social"),
+            "cnae_principal": cad.get("cnae_principal"),
+            "cnaes_secundarios": cad.get("cnaes_secundarios"),
+            "cep": cad.get("cep"),
+            "logradouro": cad.get("logradouro"),
+            "numero": cad.get("numero"),
+            "complemento": cad.get("complemento"),
+            "bairro": cad.get("bairro"),
+            "municipio": cad.get("municipio"),
+            "uf": cad.get("uf"),
+            "qsa": cad.get("qsa"),
+            "dados_cnpj_json": cad.get("dados_cnpj_json"),
+        }
 
-        if criar:
-            if not documento_valido:
-                st.error("Cadastro bloqueado: anexe o Cartão CNPJ oficial.")
-            elif empresa_existente is not None and empresa_existente.get("senha_hash"):
-                st.error("Cadastro bloqueado: este CNPJ já possui conta cadastrada.")
-            elif senha != confirmar:
-                st.error("As senhas não conferem.")
-            elif not nome_oficial.strip() or not cnpj_oficial.strip():
-                st.error("Razão Social e CNPJ são obrigatórios.")
-            elif not nome_fantasia.strip() or not situacao_cadastral.strip() or not natureza_juridica.strip() or not capital_social.strip():
-                st.error("Nome Fantasia, Situação Cadastral, Natureza Jurídica e Capital Social são obrigatórios.")
-            elif not cep.strip() or not logradouro.strip() or not bairro.strip() or not municipio.strip() or not uf.strip():
-                st.error("Endereço completo é obrigatório.")
-            elif not email.strip() or not telefone.strip() or not senha:
-                st.error("Informe e-mail, telefone e senha.")
-            elif not telefone_valido(telefone):
-                st.error("Telefone inválido. Informe DDD + número, exemplo: (61) 99987-8710.")
-            else:
-                dados_cadastrais = {
-                    "nome_fantasia": nome_fantasia,
-                    "situacao_cadastral": situacao_cadastral,
-                    "data_abertura": data_abertura,
-                    "porte": porte,
-                    "natureza_juridica": natureza_juridica,
-                    "capital_social": capital_social.replace(".", "").replace(",", ".") if capital_social else 0,
-                    "cnae_principal": cnae_principal,
-                    "cnaes_secundarios": cnaes_secundarios,
-                    "cep": cep,
-                    "logradouro": logradouro,
-                    "numero": numero,
-                    "complemento": complemento,
-                    "bairro": bairro,
-                    "municipio": municipio,
-                    "uf": uf,
-                    "qsa": qsa,
-                }
+        ok, msg, empresa_id = criar_empresa(
+            cad.get("nome"),
+            cad.get("cnpj"),
+            cad.get("email"),
+            cad.get("telefone"),
+            senha,
+            dados_cadastrais
+        )
 
-                ok, msg, empresa_id = criar_empresa(nome_oficial, cnpj_oficial, email, telefone, senha, dados_cadastrais)
+        if ok:
+            nome_empresa = cad.get("nome")
+            limpar_cadastro_session()
+            st.session_state["logado"] = True
+            st.session_state["empresa_id"] = empresa_id
+            st.session_state["empresa_nome"] = nome_empresa
+            st.success(msg)
+            st.rerun()
+        else:
+            st.warning(msg)
 
-                if ok:
-                    st.session_state["logado"] = True
-                    st.session_state["empresa_id"] = empresa_id
-                    st.session_state["empresa_nome"] = nome_oficial
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.warning(msg)
 
-    st.stop()
-
-preparar_banco()
 inicializar_schema_goia()
 suspender_testes_expirados()
-garantir_enriquecimento_cadastral()
-garantir_motor_encerramento()
-garantir_schema_documental()
 garantir_empresa_bootstrap()
 
 if not st.session_state.get("logado") or not st.session_state.get("empresa_id"):
     tela_login()
     st.stop()
 
+
 EMPRESA_ID = st.session_state.get("empresa_id")
+
 
 def carregar_movimentacoes():
     conn = conectar()
@@ -1091,7 +829,7 @@ def carregar_movimentacoes():
             FROM contas_receber
             WHERE empresa_id = ?
         """, conn, params=(EMPRESA_ID,))
-    except:
+    except Exception:
         receber = pd.DataFrame(columns=["data", "tipo", "descricao", "categoria", "valor", "status"])
 
     try:
@@ -1100,11 +838,12 @@ def carregar_movimentacoes():
             FROM contas_pagar
             WHERE empresa_id = ?
         """, conn, params=(EMPRESA_ID,))
-    except:
+    except Exception:
         pagar = pd.DataFrame(columns=["data", "tipo", "descricao", "categoria", "valor", "status"])
 
     conn.close()
     return pd.concat([receber, pagar], ignore_index=True)
+
 
 df = carregar_movimentacoes()
 
@@ -1117,11 +856,13 @@ def contar_tabela(nome_tabela, where="empresa_id = ?", params=None):
     conn = conectar()
     cur = conn.cursor()
     params = params or (EMPRESA_ID,)
+
     try:
         cur.execute(f"SELECT COUNT(*) FROM {nome_tabela} WHERE {where}", params)
         valor = cur.fetchone()[0] or 0
     except Exception:
         valor = 0
+
     conn.close()
     return valor
 
@@ -1130,11 +871,13 @@ def somar_tabela(nome_tabela, coluna, where="empresa_id = ?", params=None):
     conn = conectar()
     cur = conn.cursor()
     params = params or (EMPRESA_ID,)
+
     try:
         cur.execute(f"SELECT COALESCE(SUM({coluna}), 0) FROM {nome_tabela} WHERE {where}", params)
         valor = cur.fetchone()[0] or 0
     except Exception:
         valor = 0
+
     conn.close()
     return valor
 
@@ -1154,14 +897,17 @@ pagar_aberto = somar_tabela(
 saldo_projetado = receber_aberto - pagar_aberto
 
 documentos_importados = contar_tabela("documentos")
+
 processos_abertos = contar_tabela(
     "processos_documentais",
     "empresa_id = ? AND COALESCE(status, 'Aberto') <> 'Concluído'"
 )
+
 pendencias_abertas = contar_tabela(
     "processo_pendencias",
     "empresa_id = ? AND COALESCE(status, 'Pendente') = 'Pendente'"
 )
+
 movimentos_nao_conciliados = contar_tabela(
     "movimentos_bancarios",
     "empresa_id = ? AND COALESCE(conciliado, 0) = 0"
