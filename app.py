@@ -121,6 +121,62 @@ def empresa_existe_por_cnpj(cnpj):
     return None
 
 
+
+def atualizar_dados_oficiais_empresa_existente(cnpj, cad):
+    if not cad or not limpar_cnpj(cnpj):
+        return
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE empresas
+        SET nome = COALESCE(NULLIF(?, ''), nome),
+            nome_fantasia = COALESCE(NULLIF(?, ''), nome_fantasia),
+            situacao_cadastral = COALESCE(NULLIF(?, ''), situacao_cadastral),
+            data_abertura = COALESCE(NULLIF(?, ''), data_abertura),
+            porte = COALESCE(NULLIF(?, ''), porte),
+            natureza_juridica = COALESCE(NULLIF(?, ''), natureza_juridica),
+            capital_social = COALESCE(NULLIF(?, 0), capital_social),
+            cnae_principal = COALESCE(NULLIF(?, ''), cnae_principal),
+            cnaes_secundarios = COALESCE(NULLIF(?, ''), cnaes_secundarios),
+            cep = COALESCE(NULLIF(?, ''), cep),
+            logradouro = COALESCE(NULLIF(?, ''), logradouro),
+            numero = COALESCE(NULLIF(?, ''), numero),
+            complemento = COALESCE(NULLIF(?, ''), complemento),
+            bairro = COALESCE(NULLIF(?, ''), bairro),
+            municipio = COALESCE(NULLIF(?, ''), municipio),
+            uf = COALESCE(NULLIF(?, ''), uf),
+            qsa = COALESCE(NULLIF(?, ''), qsa),
+            dados_cnpj_json = COALESCE(NULLIF(?, ''), dados_cnpj_json),
+            atualizado_em = CURRENT_TIMESTAMP
+        WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+    """, (
+        texto_padrao(cad.get("nome")),
+        texto_padrao(cad.get("nome_fantasia")),
+        texto_padrao(cad.get("situacao_cadastral")),
+        data_iso(cad.get("data_abertura")),
+        texto_padrao(cad.get("porte")),
+        texto_padrao(cad.get("natureza_juridica")),
+        normalizar_capital_social(cad.get("capital_social")),
+        texto_padrao(cad.get("cnae_principal")),
+        texto_padrao(cad.get("cnaes_secundarios")),
+        texto_padrao(cad.get("cep")),
+        texto_padrao(cad.get("logradouro")),
+        texto_padrao(cad.get("numero")),
+        texto_padrao(cad.get("complemento")),
+        texto_padrao(cad.get("bairro")),
+        texto_padrao(cad.get("municipio")),
+        texto_padrao(cad.get("uf")).upper(),
+        texto_padrao(cad.get("qsa")),
+        texto_padrao(cad.get("dados_cnpj_json")),
+        limpar_cnpj(cnpj),
+    ))
+
+    conn.commit()
+    conn.close()
+
+
 def buscar_empresa(cnpj, senha):
     conn = conectar()
     cur = conn.cursor()
@@ -486,8 +542,11 @@ def garantir_empresa_bootstrap():
     nome = "GODS - PRODUTOS, SERVICOS & EVENTOS LTDA"
     email = os.environ.get("GOIA_BOOTSTRAP_EMAIL", "admin@gods.com.br").strip()
     telefone = os.environ.get("GOIA_BOOTSTRAP_TELEFONE", "61999878710").strip()
-    dados = {"nome_fantasia": os.environ.get("GOIA_BOOTSTRAP_FANTASIA", "GODS").strip()}
+    dados = consultar_cnpj_publica_ws(cnpj) or {}
+    if not dados.get("nome_fantasia"):
+        dados["nome_fantasia"] = os.environ.get("GOIA_BOOTSTRAP_FANTASIA", "GODS").strip()
 
+    atualizar_dados_oficiais_empresa_existente(cnpj, dados)
     criar_empresa(nome, cnpj, email, telefone, senha, dados)
 
 
@@ -700,7 +759,22 @@ def tela_cadastro_empresa():
         empresa_existente = empresa_existe_por_cnpj(cad.get("cnpj"))
 
         if empresa_existente and empresa_existente.get("senha_hash"):
-            st.warning("Este CNPJ já possui conta cadastrada na GOIA. Use a aba 'Já tenho conta' para acessar.")
+            atualizar_dados_oficiais_empresa_existente(cad.get("cnpj"), cad)
+
+            st.warning("Esta empresa já possui cadastro na GOIA.")
+            st.info("Use a aba 'Já tenho conta' para acessar. Os dados oficiais foram sincronizados no Admin GOIA.")
+
+            with st.container(border=True):
+                st.markdown("### Empresa já cadastrada")
+                c1, c2 = st.columns(2)
+                with c1:
+                    info_card("Razão Social", cad.get("nome"))
+                    info_card("CNPJ", formatar_cnpj(cad.get("cnpj")))
+                with c2:
+                    info_card("Nome Fantasia", cad.get("nome_fantasia"))
+                    info_card("Situação", cad.get("situacao_cadastral"))
+            return
+
         elif empresa_existente and not empresa_existente.get("senha_hash"):
             st.info("Este CNPJ já existe na base, mas ainda não possui senha. Complete o cadastro para ativar o acesso.")
 
@@ -776,18 +850,6 @@ def tela_cadastro_empresa():
                 height=130,
                 label_visibility="collapsed"
             )
-
-        if dados_json:
-            with st.expander("JSON bruto retornado pela API CNPJ"):
-                st.json(dados_json)
-
-                st.download_button(
-                    "Baixar JSON",
-                    data=json.dumps(dados_json, ensure_ascii=False, indent=2),
-                    file_name=f"cnpj_{limpar_cnpj(cad.get('cnpj'))}.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
 
         st.markdown("### Acesso")
 
