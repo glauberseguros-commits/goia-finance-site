@@ -1002,6 +1002,26 @@ if not st.session_state.get("logado") or not st.session_state.get("empresa_id"):
 
 EMPRESA_ID = st.session_state.get("empresa_id")
 
+conn = conectar()
+cur = conn.cursor()
+
+cur.execute("""
+SELECT id
+FROM empresas
+WHERE id = ?
+  AND COALESCE(status_assinatura,'Ativa') = 'Ativa'
+LIMIT 1
+""", (EMPRESA_ID,))
+
+empresa_valida = cur.fetchone()
+
+conn.close()
+
+if not empresa_valida:
+    st.session_state.clear()
+    st.warning("Sua empresa não possui mais acesso à GOIA.")
+    st.rerun()
+
 
 def carregar_movimentacoes():
     conn = conectar()
