@@ -323,13 +323,16 @@ def carregar_documento_cadastro(documento_empresa):
     return bool(dados_doc.get("nome")) and bool(dados_doc.get("cnpj"))
 
 
+
 def sincronizar_cadastro_para_dict():
     if "cadastro_empresa" not in st.session_state:
         st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
 
     cad = st.session_state["cadastro_empresa"]
 
-    for chave in list(cad.keys()):
+    # Somente estes campos podem ser alterados pelo usuário.
+    # Os dados oficiais vindos do CNPJ não devem ser sobrescritos por widgets vazios.
+    for chave in ["email", "telefone"]:
         widget_key = f"cad_{chave}"
         if widget_key in st.session_state:
             cad[chave] = st.session_state[widget_key]
