@@ -15,6 +15,130 @@ st.set_page_config(
     layout="wide"
 )
 
+
+def aplicar_estilo_admin_premium():
+    st.markdown("""
+    <style>
+        [data-testid="stAppViewContainer"] {
+            background:
+                radial-gradient(circle at top left, rgba(67, 56, 202, 0.16), transparent 34%),
+                linear-gradient(135deg, #f8fafc 0%, #eef2ff 48%, #f8fafc 100%);
+        }
+
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+            border-right: 1px solid rgba(255,255,255,0.08);
+        }
+
+        [data-testid="stSidebar"] * {
+            color: #e5e7eb !important;
+        }
+
+        .goia-admin-login {
+            max-width: 760px;
+            margin: 8vh auto 0 auto;
+            padding: 42px 46px;
+            border-radius: 28px;
+            background: rgba(255,255,255,0.88);
+            border: 1px solid rgba(148,163,184,0.35);
+            box-shadow: 0 28px 80px rgba(15,23,42,0.18);
+            backdrop-filter: blur(14px);
+        }
+
+        .goia-admin-badge {
+            display: inline-flex;
+            gap: 10px;
+            align-items: center;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: #3730a3;
+            font-weight: 800;
+            font-size: 12px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            margin-bottom: 18px;
+        }
+
+        .goia-admin-title {
+            font-size: 46px;
+            line-height: 1.05;
+            font-weight: 900;
+            color: #0f172a;
+            letter-spacing: -0.04em;
+            margin-bottom: 12px;
+        }
+
+        .goia-admin-subtitle {
+            color: #475569;
+            font-size: 16px;
+            margin-bottom: 28px;
+        }
+
+        div.stButton > button {
+            background: linear-gradient(135deg, #ff5a3c 0%, #ef4444 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 14px !important;
+            padding: 0.72rem 1.2rem !important;
+            font-weight: 800 !important;
+            box-shadow: 0 16px 34px rgba(239,68,68,0.28);
+        }
+
+        div.stButton > button:hover {
+            filter: brightness(0.96);
+            transform: translateY(-1px);
+        }
+
+        [data-testid="stTextInput"] input {
+            border-radius: 14px !important;
+            border: 1px solid #cbd5e1 !important;
+            background: rgba(255,255,255,0.96) !important;
+            min-height: 46px;
+        }
+
+        div[data-testid="metric-container"] {
+            background: rgba(255,255,255,0.92);
+            border: 1px solid rgba(148,163,184,0.30);
+            border-radius: 22px;
+            padding: 22px;
+            box-shadow: 0 18px 42px rgba(15,23,42,0.08);
+        }
+
+        .goia-admin-hero {
+            padding: 34px 38px;
+            border-radius: 26px;
+            background: linear-gradient(135deg, #0f172a 0%, #312e81 100%);
+            color: white;
+            box-shadow: 0 28px 70px rgba(30,41,59,0.22);
+            margin-bottom: 24px;
+        }
+
+        .goia-admin-hero small {
+            color: #5eead4;
+            letter-spacing: .16em;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .goia-admin-hero h1 {
+            color: white;
+            font-size: 42px;
+            line-height: 1.05;
+            letter-spacing: -0.04em;
+            margin: 10px 0;
+        }
+
+        .goia-admin-hero p {
+            color: #dbeafe;
+            font-size: 15px;
+            margin: 0;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+aplicar_estilo_admin_premium()
+
 aplicar_estilo_premium()
 aplicar_premium_goia()
 
@@ -41,8 +165,13 @@ def autenticar_master():
     if st.session_state.get("goia_admin_logado"):
         return
 
-    st.title("🛡️ Admin GOIA")
-    st.caption("Área Master do proprietário da plataforma.")
+    st.markdown("""
+    <div class="goia-admin-login">
+        <div class="goia-admin-badge">🛡️ Área Master</div>
+        <div class="goia-admin-title">Admin GOIA</div>
+        <div class="goia-admin-subtitle">Painel restrito para gestão de assinantes, planos, bloqueios e operação da plataforma.</div>
+    </div>
+    """, unsafe_allow_html=True)
 
     senha = st.text_input("Senha master", type="password").strip()
 
