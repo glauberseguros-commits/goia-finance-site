@@ -607,6 +607,16 @@ def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
 
 
 def garantir_empresa_bootstrap():
+    """
+    Bootstrap só pode rodar quando explicitamente habilitado.
+
+    Motivo:
+    se esta função roda sempre em produção, ela recria a empresa GODS
+    depois que o Admin exclui o assinante. Isso impede derrubar o usuário final.
+    """
+    if os.environ.get("GOIA_ENABLE_BOOTSTRAP", "").strip() != "1":
+        return
+
     senha = os.environ.get("GOIA_BOOTSTRAP_PASSWORD", "").strip()
     if not senha:
         return
@@ -615,6 +625,7 @@ def garantir_empresa_bootstrap():
     nome = "GODS - PRODUTOS, SERVICOS & EVENTOS LTDA"
     email = os.environ.get("GOIA_BOOTSTRAP_EMAIL", "admin@gods.com.br").strip()
     telefone = os.environ.get("GOIA_BOOTSTRAP_TELEFONE", "61999878710").strip()
+
     dados = consultar_cnpj_publica_ws(cnpj) or {}
     if not dados.get("nome_fantasia"):
         dados["nome_fantasia"] = os.environ.get("GOIA_BOOTSTRAP_FANTASIA", "GODS").strip()
