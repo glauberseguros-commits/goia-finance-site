@@ -4,7 +4,7 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
-from utils.db import conectar_banco
+from utils.db import conectar_banco, caminho_banco
 
 st.set_page_config(
     page_title="Admin GOIA",
@@ -24,6 +24,14 @@ def aplicar_estilo_admin():
 
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, #0f172a 0%, #111827 100%) !important;
+        }
+
+        section[data-testid="stSidebar"] > div:first-child > div:first-child {
+            display: none !important;
+        }
+
+        [data-testid="stSidebarNav"] {
+            display: none !important;
         }
 
         [data-testid="stSidebar"] * {
@@ -356,6 +364,8 @@ if pagina == "Dashboard Master":
     c6.metric("Clientes", contar_tabela("clientes"))
     c7.metric("Fornecedores", contar_tabela("fornecedores"))
     c8.metric("Processos", contar_tabela("processos_documentais"))
+
+    st.caption(f"Banco em uso: {caminho_banco()}")
 
     st.subheader("Últimos assinantes")
 
