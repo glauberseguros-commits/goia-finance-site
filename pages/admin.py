@@ -17,280 +17,84 @@ st.set_page_config(
 
 
 def aplicar_estilo_admin_premium():
-    st.markdown("""
-    <style>
-        /* FUNDO GERAL */
-        .stApp {
-            background:
-                radial-gradient(circle at top left, rgba(49, 46, 129, 0.16), transparent 32%),
-                linear-gradient(135deg, #f8fafc 0%, #eef2ff 48%, #f8fafc 100%) !important;
-            color: #0f172a !important;
-        }
-
-        [data-testid="stAppViewContainer"] {
-            background:
-                radial-gradient(circle at top left, rgba(49, 46, 129, 0.16), transparent 32%),
-                linear-gradient(135deg, #f8fafc 0%, #eef2ff 48%, #f8fafc 100%) !important;
-        }
-
-        /* SIDEBAR FORTE */
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0f172a 0%, #111827 100%) !important;
-            border-right: 1px solid rgba(255,255,255,0.08) !important;
-        }
-
-        [data-testid="stSidebar"] section,
-        [data-testid="stSidebar"] div {
-            background: transparent !important;
-        }
-
-        [data-testid="stSidebar"] p,
-        [data-testid="stSidebar"] span,
-        [data-testid="stSidebar"] label,
-        [data-testid="stSidebar"] div,
-        [data-testid="stSidebar"] h1,
-        [data-testid="stSidebar"] h2,
-        [data-testid="stSidebar"] h3 {
-            color: #f8fafc !important;
-            opacity: 1 !important;
-            font-weight: 700 !important;
-        }
-
-        [data-testid="stSidebar"] small {
-            color: #cbd5e1 !important;
-        }
-
-        [data-testid="stSidebar"] [role="radiogroup"] label {
-            background: rgba(255,255,255,0.06) !important;
-            border: 1px solid rgba(255,255,255,0.10) !important;
-            border-radius: 12px !important;
-            padding: 8px 10px !important;
-            margin-bottom: 8px !important;
-        }
-
-        [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-            background: rgba(255,255,255,0.12) !important;
-        }
-
-        [data-testid="stSidebar"] input[type="radio"] {
-            accent-color: #ff5a3c !important;
-        }
-
-        /* CONTEÚDO */
-        .block-container {
-            padding-top: 3.5rem !important;
-            max-width: 1240px !important;
-        }
-
-        /* LOGIN CARD */
-        .goia-admin-login {
-            max-width: 760px;
-            margin: 8vh auto 0 auto;
-            padding: 44px 48px;
-            border-radius: 30px;
-            background: rgba(255,255,255,0.94);
-            border: 1px solid rgba(148,163,184,0.38);
-            box-shadow: 0 30px 90px rgba(15,23,42,0.18);
-            backdrop-filter: blur(14px);
-        }
-
-        .goia-admin-badge {
-            display: inline-flex;
-            gap: 10px;
-            align-items: center;
-            padding: 8px 14px;
-            border-radius: 999px;
-            background: #eef2ff;
-            color: #312e81 !important;
-            font-weight: 900;
-            font-size: 12px;
-            letter-spacing: .09em;
-            text-transform: uppercase;
-            margin-bottom: 18px;
-        }
-
-        .goia-admin-title {
-            font-size: 48px;
-            line-height: 1.05;
-            font-weight: 950;
-            color: #0f172a !important;
-            letter-spacing: -0.045em;
-            margin-bottom: 12px;
-        }
-
-        .goia-admin-subtitle {
-            color: #334155 !important;
-            font-size: 16px;
-            font-weight: 500;
-            margin-bottom: 28px;
-        }
-
-        /* HERO INTERNO */
-        .goia-admin-hero {
-            padding: 42px 44px;
-            border-radius: 28px;
-            background: linear-gradient(135deg, #0f172a 0%, #312e81 100%);
-            color: white !important;
-            box-shadow: 0 28px 70px rgba(30,41,59,0.24);
-            margin-bottom: 26px;
-        }
-
-        .goia-admin-hero small {
-            color: #5eead4 !important;
-            letter-spacing: .17em;
-            font-weight: 900;
-            text-transform: uppercase;
-        }
-
-        .goia-admin-hero h1 {
-            color: white !important;
-            font-size: 44px;
-            line-height: 1.05;
-            letter-spacing: -0.045em;
-            margin: 12px 0;
-            font-weight: 950;
-        }
-
-        .goia-admin-hero p {
-            color: #dbeafe !important;
-            font-size: 16px;
-            font-weight: 500;
-            margin: 0;
-        }
-
-        /* BOTÕES */
-        div.stButton > button {
-            background: linear-gradient(135deg, #ff5a3c 0%, #ef4444 100%) !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 14px !important;
-            padding: 0.75rem 1.25rem !important;
-            font-weight: 900 !important;
-            box-shadow: 0 16px 34px rgba(239,68,68,0.30);
-        }
-
-        div.stButton > button:hover {
-            filter: brightness(0.97);
-            transform: translateY(-1px);
-        }
-
-        /* INPUTS */
-        [data-testid="stTextInput"] input,
-        textarea {
-            border-radius: 14px !important;
-            border: 1px solid #94a3b8 !important;
-            background: rgba(255,255,255,0.98) !important;
-            color: #0f172a !important;
-            min-height: 46px;
-            font-weight: 600;
-        }
-
-        [data-testid="stTextInput"] label,
-        [data-testid="stTextArea"] label {
-            color: #1e293b !important;
-            font-weight: 800 !important;
-        }
-
-        /* KPIs */
-        div[data-testid="metric-container"] {
-            background: rgba(255,255,255,0.96) !important;
-            border: 1px solid rgba(148,163,184,0.35) !important;
-            border-radius: 22px !important;
-            padding: 24px !important;
-            box-shadow: 0 18px 42px rgba(15,23,42,0.10) !important;
-        }
-
-        div[data-testid="metric-container"] label,
-        div[data-testid="metric-container"] p {
-            color: #1e293b !important;
-            font-size: 15px !important;
-            font-weight: 850 !important;
-        }
-
-        div[data-testid="metric-container"] [data-testid="stMetricValue"] {
-            color: #0f172a !important;
-            font-size: 42px !important;
-            font-weight: 950 !important;
-        }
-
-        /* TEXTOS E ALERTAS */
-        h1, h2, h3, h4, p, span, label {
-            color: #0f172a;
-        }
-
-        [data-testid="stAlert"] {
-            border-radius: 16px !important;
-            border: 1px solid rgba(99,102,241,0.28) !important;
-            background: #e0e7ff !important;
-            color: #1e1b4b !important;
-        }
-
-        [data-testid="stAlert"] p,
-        [data-testid="stAlert"] div {
-            color: #1e1b4b !important;
-            font-weight: 700 !important;
-        }
-
-        hr {
-            border-color: #cbd5e1 !important;
-            opacity: 1 !important;
-        }
-
-        /* TABELAS */
-        [data-testid="stDataFrame"] {
-            border-radius: 18px !important;
-            overflow: hidden !important;
-            border: 1px solid #cbd5e1 !important;
-            box-shadow: 0 16px 40px rgba(15,23,42,0.08);
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-aplicar_estilo_admin_premium()
-
-aplicar_estilo_premium()
-aplicar_premium_goia()
-
+    
 st.markdown("""
-<style>
-[data-testid="stSidebarNav"] {
-    display: none;
-}
-</style>
+<div style="
+max-width:720px;
+margin:50px auto 40px auto;
+">
+
+<div class="goia-admin-hero">
+
+<small>GOIA FINANCE PLATFORM</small>
+
+<h1>GOIA Control Center</h1>
+
+<p>
+Painel Master da plataforma.<br>
+Controle completo de assinantes, planos, permissões,
+financeiro, auditoria e operação.
+</p>
+
+</div>
+
+</div>
 """, unsafe_allow_html=True)
 
+st.markdown("### 🔒 Acesso Administrativo")
 
-def hash_senha(senha):
-    return hashlib.sha256(senha.encode("utf-8")).hexdigest()
+st.caption(
+"Entre com a senha master configurada no Render."
+)
 
+senha = st.text_input(
+"Senha Master",
+type="password",
+placeholder="Digite a senha administrativa"
+)
 
-def autenticar_master():
-    senha_admin = os.getenv("GOIA_ADMIN_PASSWORD", "").strip()
+col1,col2,col3 = st.columns([1,2,1])
 
-    if not senha_admin:
-        st.error("GOIA_ADMIN_PASSWORD não configurada no Render.")
-        st.stop()
+with col2:
 
-    if st.session_state.get("goia_admin_logado"):
-        return
-
-    st.markdown("""
-    <div class="goia-admin-login">
-        <div class="goia-admin-badge">🛡️ Área Master</div>
-        <div class="goia-admin-title">Admin GOIA</div>
-        <div class="goia-admin-subtitle">Painel restrito para gestão de assinantes, planos, bloqueios e operação da plataforma.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    senha = st.text_input("Senha master", type="password").strip()
-
-    if st.button("Acessar Admin GOIA"):
+    entrar = st.button(
+        "Entrar no Control Center",
+        use_container_width=True
+    )
+:
         if senha == senha_admin:
             st.session_state["goia_admin_logado"] = True
             st.success("Acesso autorizado.")
             st.rerun()
         else:
-            st.error("Senha master inválida. Verifique se a senha digitada é exatamente igual à GOIA_ADMIN_PASSWORD do Render.")
+            
+st.markdown("""
+<div style="
+margin-top:20px;
+padding:20px;
+border-radius:18px;
+background:#fff5f5;
+border:1px solid #fecaca;
+">
+
+<h4 style="margin-bottom:8px;color:#b91c1c;">
+⚠ Não foi possível autenticar
+</h4>
+
+<div style="color:#7f1d1d;">
+
+Verifique se a senha digitada é exatamente a mesma
+configurada na variável
+
+<b>GOIA_ADMIN_PASSWORD</b>
+
+do Render.
+
+</div>
+
+</div>
+""",unsafe_allow_html=True)
+
 
     st.stop()
 
@@ -486,7 +290,7 @@ if st.sidebar.button("Sair do Admin"):
 
 hero(
     "Admin GOIA",
-    "Área Master para gestão dos assinantes, bloqueios, planos e controle operacional da plataforma.",
+    "Centro de controle da plataforma GOIA. Gerencie assinantes, planos, permissões, auditoria, faturamento e toda a operação do sistema.",
     icone="GOIA"
 )
 
