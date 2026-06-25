@@ -585,9 +585,79 @@ def tela_login():
     st.stop()
 
 
+
+def contar_campos_json(valor):
+    total = 0
+
+    def walk(v):
+        nonlocal total
+        if isinstance(v, dict):
+            for item in v.values():
+                walk(item)
+        elif isinstance(v, list):
+            for item in v:
+                walk(item)
+        elif v not in [None, ""]:
+            total += 1
+
+    walk(valor)
+    return total
+
+
+def json_cnpj_dict(cad):
+    bruto = cad.get("dados_cnpj_json") or ""
+    if not bruto:
+        return {}
+    try:
+        return json.loads(bruto)
+    except Exception:
+        return {}
+
+
+def formatar_cep(valor):
+    numeros = re.sub(r"\D", "", valor or "")
+    if len(numeros) == 8:
+        return f"{numeros[:5]}-{numeros[5:]}"
+    return valor or ""
+
+
+def info_card(label, value):
+    st.markdown(
+        f"""
+        <div style="
+            background:#ffffff;
+            border:1px solid rgba(148,163,184,.35);
+            border-radius:18px;
+            padding:16px 18px;
+            min-height:92px;
+            box-shadow:0 12px 28px rgba(15,23,42,.06);
+        ">
+            <div style="
+                color:#64748b;
+                font-size:11px;
+                font-weight:900;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+                margin-bottom:8px;
+            ">{label}</div>
+            <div style="
+                color:#0f172a;
+                font-size:15px;
+                font-weight:800;
+                word-break:break-word;
+            ">{value or "Não informado"}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 def tela_cadastro_empresa():
     st.subheader("Cadastrar empresa")
-    st.caption("Anexe o Cartão CNPJ oficial. A GOIA preencherá os dados oficiais. Apenas e-mail, telefone e senha ficam editáveis.")
+    st.caption(
+        "Anexe o Cartão CNPJ oficial. A GOIA preencherá os dados oficiais automaticamente. "
+        "Depois da leitura, apenas e-mail, telefone e senha ficam editáveis."
+    )
 
     if "cadastro_empresa" not in st.session_state:
         st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
@@ -616,7 +686,10 @@ def tela_cadastro_empresa():
         if valido:
             st.success(f"Documento lido e cadastro enriquecido pela API CNPJ: {documento_empresa.name}")
         else:
-            st.error("Documento anexado, mas não foi possível identificar Razão Social e CNPJ. Envie o Cartão CNPJ oficial em PDF.")
+            st.error(
+                "Documento anexado, mas não foi possível identificar Razão Social e CNPJ. "
+                "Envie o Cartão CNPJ oficial em PDF."
+            )
 
     cad = sincronizar_cadastro_para_dict()
 
@@ -631,46 +704,90 @@ def tela_cadastro_empresa():
         elif empresa_existente and not empresa_existente.get("senha_hash"):
             st.info("Este CNPJ já existe na base, mas ainda não possui senha. Complete o cadastro para ativar o acesso.")
 
+    dados_json = json_cnpj_dict(cad)
+    campos_preenchidos = contar_campos_json(dados_json) if dados_json else 0
+
     with st.container(border=True):
-        st.markdown("### Dados oficiais identificados")
+        st.markdown("### Resumo cadastral")
 
-        campo_readonly("CNPJ", formatar_cnpj(cad.get("cnpj")), "view_cnpj")
-        campo_readonly("Razão Social", cad.get("nome"), "view_nome")
+        r1, r2, r3 = st.columns([2, 1, 1])
+        with r1:
+            info_card("Razão Social", cad.get("nome"))
+        with r2:
+            info_card("CNPJ", formatar_cnpj(cad.get("cnpj")))
+        with r3:
+            info_card("Campos preenchidos pela API", campos_preenchidos)
 
-        c1, c2 = st.columns(2)
+        st.write("")
+
+        c1, c2, c3 = st.columns(3)
         with c1:
-            campo_readonly("Nome Fantasia", cad.get("nome_fantasia"), "view_nome_fantasia")
-            campo_readonly("Situação Cadastral", cad.get("situacao_cadastral"), "view_situacao_cadastral")
-            campo_readonly("Data de Abertura", data_br(cad.get("data_abertura")), "view_data_abertura")
-            campo_readonly("Porte", cad.get("porte"), "view_porte")
+            info_card("Nome Fantasia", cad.get("nome_fantasia"))
         with c2:
-            campo_readonly("Natureza Jurídica", cad.get("natureza_juridica"), "view_natureza_juridica")
-            campo_readonly("Capital Social", formatar_capital_social(cad.get("capital_social")), "view_capital_social")
-            campo_readonly("CNAE Principal", cad.get("cnae_principal"), "view_cnae_principal")
+            info_card("Situação Cadastral", cad.get("situacao_cadastral"))
+        with c3:
+            info_card("Data de Abertura", data_br(cad.get("data_abertura")))
 
-        campo_readonly("CNAEs Secundários", cad.get("cnaes_secundarios"), "view_cnaes_secundarios", area=True, height=120)
+        c4, c5, c6 = st.columns(3)
+        with c4:
+            info_card("Porte", cad.get("porte"))
+        with c5:
+            info_card("Natureza Jurídica", cad.get("natureza_juridica"))
+        with c6:
+            info_card("Capital Social", formatar_capital_social(cad.get("capital_social")))
+
+        st.write("")
+        info_card("CNAE Principal", cad.get("cnae_principal"))
+
+        with st.expander("CNAEs secundários"):
+            st.text_area(
+                "CNAEs secundários",
+                value=cad.get("cnaes_secundarios") or "Não informado",
+                disabled=True,
+                height=130,
+                label_visibility="collapsed"
+            )
 
         st.markdown("### Endereço oficial")
 
         e1, e2, e3 = st.columns([1, 2, 1])
         with e1:
-            campo_readonly("CEP", cad.get("cep"), "view_cep")
+            info_card("CEP", formatar_cep(cad.get("cep")))
         with e2:
-            campo_readonly("Logradouro", cad.get("logradouro"), "view_logradouro")
+            info_card("Logradouro", cad.get("logradouro"))
         with e3:
-            campo_readonly("Número", cad.get("numero"), "view_numero")
+            info_card("Número", cad.get("numero"))
 
         e4, e5, e6, e7 = st.columns([2, 2, 2, 1])
         with e4:
-            campo_readonly("Complemento", cad.get("complemento"), "view_complemento")
+            info_card("Complemento", cad.get("complemento"))
         with e5:
-            campo_readonly("Bairro", cad.get("bairro"), "view_bairro")
+            info_card("Bairro", cad.get("bairro"))
         with e6:
-            campo_readonly("Município", cad.get("municipio"), "view_municipio")
+            info_card("Município", cad.get("municipio"))
         with e7:
-            campo_readonly("UF", cad.get("uf"), "view_uf")
+            info_card("UF", cad.get("uf"))
 
-        campo_readonly("Sócios / QSA", cad.get("qsa"), "view_qsa", area=True, height=120)
+        with st.expander("Sócios / QSA"):
+            st.text_area(
+                "Sócios / QSA",
+                value=cad.get("qsa") or "Não informado",
+                disabled=True,
+                height=130,
+                label_visibility="collapsed"
+            )
+
+        if dados_json:
+            with st.expander("JSON bruto retornado pela API CNPJ"):
+                st.json(dados_json)
+
+                st.download_button(
+                    "Baixar JSON",
+                    data=json.dumps(dados_json, ensure_ascii=False, indent=2),
+                    file_name=f"cnpj_{limpar_cnpj(cad.get('cnpj'))}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
 
         st.markdown("### Acesso")
 
@@ -739,6 +856,7 @@ def tela_cadastro_empresa():
             st.rerun()
         else:
             st.warning(msg)
+
 
 
 inicializar_schema_goia()
