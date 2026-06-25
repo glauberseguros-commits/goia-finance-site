@@ -1,5 +1,6 @@
 import os
 import hashlib
+from pathlib import Path
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -856,6 +857,132 @@ def pagina_auditoria(empresas):
     st.dataframe(df, use_container_width=True, hide_index=True)
 
 
+def tabela_existe(tabela):
+    conn = conectar()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = ?
+            LIMIT 1
+        """, (tabela,))
+        existe = cur.fetchone() is not None
+    except Exception:
+        existe = False
+    finally:
+        conn.close()
+    return existe
+
+
+def tamanho_arquivo(path):
+    try:
+        p = Path(path)
+        if not p.exists():
+            return "Não existe"
+        tamanho = p.stat().st_size
+        if tamanho >= 1024 * 1024:
+            return f"{tamanho / (1024 * 1024):.2f} MB"
+        if tamanho >= 1024:
+            return f"{tamanho / 1024:.2f} KB"
+        return f"{tamanho} bytes"
+    except Exception:
+        return "Indisponível"
+
+
+def status_bool(valor):
+    return "Sim" if valor else "Não"
+
+
+def pagina_diagnostico(empresas):
+    st.subheader("Diagnóstico operacional")
+    st.caption("Use esta tela para confirmar se a GOIA está usando banco persistente ou fallback descartável.")
+
+    db_path = caminho_banco()
+    db_path_str = str(db_path)
+    env_db = os.getenv("GOIA_DB_PATH", "").strip()
+    data_path = Path("/data")
+    bd_path = Path("bd/gofinance.db")
+    usando_data = db_path_str.replace("\\", "/").startswith("/data/")
+    usando_env = bool(env_db)
+    usando_fallback = not usando_data and not usando_env
+
+    if usando_fallback:
+        st.error("ALERTA: a aplicação está usando fallback local. Em deploy/restart, os dados podem desaparecer.")
+    elif usando_data:
+        st.success("Banco persistente detectado em /data.")
+    elif usando_env:
+        st.success("GOIA_DB_PATH configurado. Verifique se o caminho aponta para disco persistente.")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Empresas", contar_tabela("empresas"))
+    c2.metric("Clientes", contar_tabela("clientes"))
+    c3.metric("Documentos", contar_tabela("documentos"))
+
+    c4, c5, c6 = st.columns(3)
+    c4.metric("Fornecedores", contar_tabela("fornecedores"))
+    c5.metric("Contas a receber", contar_tabela("contas_receber"))
+    c6.metric("Contas a pagar", contar_tabela("contas_pagar"))
+
+    st.divider()
+
+    st.markdown("### Banco de dados")
+    dados = pd.DataFrame([
+        {"Item": "Banco em uso", "Valor": db_path_str},
+        {"Item": "GOIA_DB_PATH", "Valor": env_db or "Não configurado"},
+        {"Item": "/data existe", "Valor": status_bool(data_path.exists())},
+        {"Item": "bd/gofinance.db existe", "Valor": status_bool(bd_path.exists())},
+        {"Item": "Tamanho banco em uso", "Valor": tamanho_arquivo(db_path)},
+        {"Item": "Tamanho bd/gofinance.db", "Valor": tamanho_arquivo(bd_path)},
+        {"Item": "Modo provável", "Valor": "Fallback local" if usando_fallback else "Persistente/Configurado"},
+    ])
+    st.dataframe(dados, use_container_width=True, hide_index=True)
+
+    st.markdown("### Tabelas principais")
+    tabelas = [
+        "empresas",
+        "clientes",
+        "fornecedores",
+        "documentos",
+        "contas_receber",
+        "contas_pagar",
+        "movimentos_bancarios",
+        "processos_documentais",
+        "repositorio_documental",
+    ]
+
+    linhas = []
+    for tabela in tabelas:
+        linhas.append({
+            "Tabela": tabela,
+            "Existe": status_bool(tabela_existe(tabela)),
+            "Registros": contar_tabela(tabela),
+        })
+
+    st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+
+    st.markdown("### Assinantes atuais")
+    if empresas.empty:
+        st.warning("Nenhum assinante encontrado na tabela empresas.")
+    else:
+        cols = ["id", "nome", "cnpj_cpf", "email", "telefone", "plano", "status_assinatura", "criado_em"]
+        df = empresas[[c for c in cols if c in empresas.columns]].copy()
+        if "cnpj_cpf" in df.columns:
+            df["cnpj_cpf"] = df["cnpj_cpf"].apply(formatar_cnpj)
+        if "telefone" in df.columns:
+            df["telefone"] = df["telefone"].apply(formatar_telefone)
+        if "criado_em" in df.columns:
+            df["criado_em"] = df["criado_em"].apply(data_br)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+    st.markdown("### Recomendação")
+    if usando_fallback:
+        st.info("Configure no Render um Persistent Disk montado em /data e a variável GOIA_DB_PATH=/data/gofinance.db.")
+    else:
+        st.info("Persistência aparentemente configurada. Faça teste de redeploy para confirmar que os registros permanecem.")
+
+
 aplicar_estilo_admin()
 inicializar_schema_goia()
 autenticar_master()
@@ -865,7 +992,7 @@ st.sidebar.caption("Control Center")
 
 pagina = st.sidebar.radio(
     "Menu",
-    ["Dashboard Master", "Assinantes", "Financeiro", "Auditoria"],
+    ["Dashboard Master", "Assinantes", "Financeiro", "Auditoria", "Diagnóstico"],
     label_visibility="collapsed"
 )
 
@@ -888,5 +1015,8 @@ elif pagina == "Financeiro":
 
 elif pagina == "Auditoria":
     pagina_auditoria(empresas)
+
+elif pagina == "Diagnóstico":
+    pagina_diagnostico(empresas)
 
 st.caption("GOIA · Área Master da plataforma")
