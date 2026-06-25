@@ -109,72 +109,133 @@ def empresa_existe_por_cnpj(cnpj):
     conn = conectar()
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, nome, senha_hash
+        SELECT
+            id,
+            nome,
+            cnpj_cpf,
+            email,
+            telefone,
+            senha_hash,
+            status_assinatura,
+            plano,
+            periodo_assinatura,
+            criado_em
         FROM empresas
         WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
         LIMIT 1
     """, (limpar_cnpj(cnpj),))
     row = cur.fetchone()
     conn.close()
-    if row:
-        return {"id": row[0], "nome": row[1], "senha_hash": row[2]}
-    return None
 
+    if not row:
+        return None
+
+    return {
+        "id": row[0],
+        "nome": row[1],
+        "cnpj_cpf": row[2],
+        "email": row[3],
+        "telefone": row[4],
+        "senha_hash": row[5],
+        "status_assinatura": row[6],
+        "plano": row[7],
+        "periodo_assinatura": row[8],
+        "criado_em": row[9],
+    }
+
+
+def objeto_oficial_empresa(cad):
+    """
+    Fonte única dos dados oficiais da empresa.
+    Este objeto é o mesmo usado para exibir no cadastro e gravar no banco.
+    Campos de acesso (e-mail, telefone e senha) ficam fora deste objeto, exceto quando
+    a API CNPJ fornece e-mail/telefone como sugestão inicial.
+    """
+    cad = cad or {}
+
+    return {
+        "nome": texto_padrao(cad.get("nome")),
+        "nome_fantasia": texto_padrao(cad.get("nome_fantasia")),
+        "cnpj": limpar_cnpj(cad.get("cnpj")),
+        "situacao_cadastral": texto_padrao(cad.get("situacao_cadastral")),
+        "data_abertura": data_iso(cad.get("data_abertura")),
+        "porte": texto_padrao(cad.get("porte")),
+        "natureza_juridica": texto_padrao(cad.get("natureza_juridica")),
+        "capital_social": normalizar_capital_social(cad.get("capital_social")),
+        "cnae_principal": texto_padrao(cad.get("cnae_principal")),
+        "cnaes_secundarios": texto_padrao(cad.get("cnaes_secundarios")),
+        "cep": texto_padrao(cad.get("cep")),
+        "logradouro": texto_padrao(cad.get("logradouro")),
+        "numero": texto_padrao(cad.get("numero")),
+        "complemento": texto_padrao(cad.get("complemento")),
+        "bairro": texto_padrao(cad.get("bairro")),
+        "municipio": texto_padrao(cad.get("municipio")),
+        "uf": texto_padrao(cad.get("uf")).upper(),
+        "qsa": texto_padrao(cad.get("qsa")),
+        "dados_cnpj_json": texto_padrao(cad.get("dados_cnpj_json")),
+    }
 
 
 def atualizar_dados_oficiais_empresa_existente(cnpj, cad):
-    if not cad or not limpar_cnpj(cnpj):
-        return
+    """
+    Sincroniza dados oficiais vindos da API CNPJ em empresa já existente.
+    Não altera e-mail, telefone, senha, plano ou status operacional.
+    Não sobrescreve campos oficiais já existentes com valores vazios.
+    """
+    oficial = objeto_oficial_empresa(cad)
+    cnpj_limpo = limpar_cnpj(cnpj or oficial.get("cnpj"))
+
+    if not cnpj_limpo:
+        return False
+
+    campos_texto = [
+        "nome",
+        "nome_fantasia",
+        "situacao_cadastral",
+        "data_abertura",
+        "porte",
+        "natureza_juridica",
+        "cnae_principal",
+        "cnaes_secundarios",
+        "cep",
+        "logradouro",
+        "numero",
+        "complemento",
+        "bairro",
+        "municipio",
+        "uf",
+        "qsa",
+        "dados_cnpj_json",
+    ]
+
+    set_partes = []
+    params = []
+
+    for campo in campos_texto:
+        set_partes.append(f"{campo} = CASE WHEN ? <> '' THEN ? ELSE {campo} END")
+        params.extend([oficial.get(campo, ""), oficial.get(campo, "")])
+
+    if oficial.get("capital_social", 0) > 0:
+        set_partes.append("capital_social = ?")
+        params.append(oficial["capital_social"])
+
+    set_partes.append("atualizado_em = CURRENT_TIMESTAMP")
+    params.append(cnpj_limpo)
+
+    sql = f"""
+        UPDATE empresas
+        SET {', '.join(set_partes)}
+        WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
+    """
 
     conn = conectar()
     cur = conn.cursor()
-
-    cur.execute("""
-        UPDATE empresas
-        SET nome = COALESCE(NULLIF(?, ''), nome),
-            nome_fantasia = COALESCE(NULLIF(?, ''), nome_fantasia),
-            situacao_cadastral = COALESCE(NULLIF(?, ''), situacao_cadastral),
-            data_abertura = COALESCE(NULLIF(?, ''), data_abertura),
-            porte = COALESCE(NULLIF(?, ''), porte),
-            natureza_juridica = COALESCE(NULLIF(?, ''), natureza_juridica),
-            capital_social = COALESCE(NULLIF(?, 0), capital_social),
-            cnae_principal = COALESCE(NULLIF(?, ''), cnae_principal),
-            cnaes_secundarios = COALESCE(NULLIF(?, ''), cnaes_secundarios),
-            cep = COALESCE(NULLIF(?, ''), cep),
-            logradouro = COALESCE(NULLIF(?, ''), logradouro),
-            numero = COALESCE(NULLIF(?, ''), numero),
-            complemento = COALESCE(NULLIF(?, ''), complemento),
-            bairro = COALESCE(NULLIF(?, ''), bairro),
-            municipio = COALESCE(NULLIF(?, ''), municipio),
-            uf = COALESCE(NULLIF(?, ''), uf),
-            qsa = COALESCE(NULLIF(?, ''), qsa),
-            dados_cnpj_json = COALESCE(NULLIF(?, ''), dados_cnpj_json),
-            atualizado_em = CURRENT_TIMESTAMP
-        WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj_cpf,'.',''),'/',''),'-',''),' ','') = ?
-    """, (
-        texto_padrao(cad.get("nome")),
-        texto_padrao(cad.get("nome_fantasia")),
-        texto_padrao(cad.get("situacao_cadastral")),
-        data_iso(cad.get("data_abertura")),
-        texto_padrao(cad.get("porte")),
-        texto_padrao(cad.get("natureza_juridica")),
-        normalizar_capital_social(cad.get("capital_social")),
-        texto_padrao(cad.get("cnae_principal")),
-        texto_padrao(cad.get("cnaes_secundarios")),
-        texto_padrao(cad.get("cep")),
-        texto_padrao(cad.get("logradouro")),
-        texto_padrao(cad.get("numero")),
-        texto_padrao(cad.get("complemento")),
-        texto_padrao(cad.get("bairro")),
-        texto_padrao(cad.get("municipio")),
-        texto_padrao(cad.get("uf")).upper(),
-        texto_padrao(cad.get("qsa")),
-        texto_padrao(cad.get("dados_cnpj_json")),
-        limpar_cnpj(cnpj),
-    ))
-
+    cur.execute(sql, params)
+    alterou = cur.rowcount > 0
     conn.commit()
     conn.close()
+
+    return alterou
 
 
 def buscar_empresa(cnpj, senha):
@@ -336,22 +397,25 @@ def limpar_cadastro_session():
 
 
 def aplicar_dados_no_session(dados):
+    """
+    Mantém os dados oficiais em st.session_state["cadastro_empresa"].
+    Widgets editáveis recebem apenas e-mail e telefone.
+    """
     if "cadastro_empresa" not in st.session_state:
         st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
 
     cad = st.session_state["cadastro_empresa"]
 
-    for chave, valor in dados.items():
+    for chave, valor in (dados or {}).items():
         if valor not in [None, ""]:
             cad[chave] = valor
 
-    for chave, valor in cad.items():
-        widget_key = f"cad_{chave}"
-        if widget_key not in st.session_state:
-            if chave == "telefone":
-                st.session_state[widget_key] = formatar_telefone(valor)
-            else:
-                st.session_state[widget_key] = "" if valor is None else str(valor)
+    # Sugestões iniciais da API/PDF para campos editáveis.
+    if "cad_email" not in st.session_state:
+        st.session_state["cad_email"] = texto_padrao(cad.get("email"))
+
+    if "cad_telefone" not in st.session_state:
+        st.session_state["cad_telefone"] = formatar_telefone(cad.get("telefone"))
 
 
 def carregar_documento_cadastro(documento_empresa):
@@ -366,17 +430,21 @@ def carregar_documento_cadastro(documento_empresa):
     if dados_doc.get("cnpj"):
         dados_api = consultar_cnpj_publica_ws(dados_doc.get("cnpj"))
         if dados_api:
-            for chave, valor in dados_api.items():
-                if valor not in [None, ""]:
-                    dados_doc[chave] = valor
+            dados_doc.update({k: v for k, v in dados_api.items() if v not in [None, ""]})
 
     dados_doc["documento_nome"] = nome_arquivo
     dados_doc["documento_processado"] = True
 
+    # Novo documento = novo objeto oficial. Evita herdar valores de cadastro anterior.
+    for key in ["cad_email", "cad_telefone", "cad_senha", "cad_confirmar"]:
+        if key in st.session_state:
+            del st.session_state[key]
+
     st.session_state["cadastro_empresa"] = modelo_cadastro_empresa()
     aplicar_dados_no_session(dados_doc)
 
-    return bool(dados_doc.get("nome")) and bool(dados_doc.get("cnpj"))
+    cad = st.session_state["cadastro_empresa"]
+    return bool(cad.get("nome")) and bool(cad.get("cnpj"))
 
 
 
@@ -433,7 +501,11 @@ def validar_cadastro(cad, senha, confirmar, empresa_existente):
 
 
 def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
-    dados_cadastrais = dados_cadastrais or {}
+    oficial = objeto_oficial_empresa({
+        **(dados_cadastrais or {}),
+        "nome": nome,
+        "cnpj": cnpj,
+    })
 
     conn = conectar()
     cur = conn.cursor()
@@ -449,28 +521,28 @@ def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
     existente = cur.fetchone()
 
     valores = {
-        "nome": texto_padrao(nome),
-        "nome_fantasia": texto_padrao(dados_cadastrais.get("nome_fantasia")),
+        "nome": texto_padrao(oficial.get("nome")),
+        "nome_fantasia": texto_padrao(oficial.get("nome_fantasia")),
         "cnpj_cpf": cnpj_limpo,
         "email": texto_padrao(email),
         "telefone": limpar_telefone(telefone),
         "senha_hash": hash_senha(senha),
-        "situacao_cadastral": texto_padrao(dados_cadastrais.get("situacao_cadastral")),
-        "data_abertura": data_iso(dados_cadastrais.get("data_abertura")),
-        "porte": texto_padrao(dados_cadastrais.get("porte")),
-        "natureza_juridica": texto_padrao(dados_cadastrais.get("natureza_juridica")),
-        "capital_social": normalizar_capital_social(dados_cadastrais.get("capital_social")),
-        "cnae_principal": texto_padrao(dados_cadastrais.get("cnae_principal")),
-        "cnaes_secundarios": texto_padrao(dados_cadastrais.get("cnaes_secundarios")),
-        "cep": texto_padrao(dados_cadastrais.get("cep")),
-        "logradouro": texto_padrao(dados_cadastrais.get("logradouro")),
-        "numero": texto_padrao(dados_cadastrais.get("numero")),
-        "complemento": texto_padrao(dados_cadastrais.get("complemento")),
-        "bairro": texto_padrao(dados_cadastrais.get("bairro")),
-        "municipio": texto_padrao(dados_cadastrais.get("municipio")),
-        "uf": texto_padrao(dados_cadastrais.get("uf")).upper(),
-        "qsa": texto_padrao(dados_cadastrais.get("qsa")),
-        "dados_cnpj_json": texto_padrao(dados_cadastrais.get("dados_cnpj_json")),
+        "situacao_cadastral": texto_padrao(oficial.get("situacao_cadastral")),
+        "data_abertura": data_iso(oficial.get("data_abertura")),
+        "porte": texto_padrao(oficial.get("porte")),
+        "natureza_juridica": texto_padrao(oficial.get("natureza_juridica")),
+        "capital_social": normalizar_capital_social(oficial.get("capital_social")),
+        "cnae_principal": texto_padrao(oficial.get("cnae_principal")),
+        "cnaes_secundarios": texto_padrao(oficial.get("cnaes_secundarios")),
+        "cep": texto_padrao(oficial.get("cep")),
+        "logradouro": texto_padrao(oficial.get("logradouro")),
+        "numero": texto_padrao(oficial.get("numero")),
+        "complemento": texto_padrao(oficial.get("complemento")),
+        "bairro": texto_padrao(oficial.get("bairro")),
+        "municipio": texto_padrao(oficial.get("municipio")),
+        "uf": texto_padrao(oficial.get("uf")).upper(),
+        "qsa": texto_padrao(oficial.get("qsa")),
+        "dados_cnpj_json": texto_padrao(oficial.get("dados_cnpj_json")),
         "plano": "Teste",
         "status_assinatura": "Ativa",
         "periodo_assinatura": "7 dias grátis",
@@ -489,8 +561,9 @@ def criar_empresa(nome, cnpj, email, telefone, senha, dados_cadastrais=None):
                 situacao_cadastral = ?, data_abertura = ?, porte = ?, natureza_juridica = ?,
                 capital_social = ?, cnae_principal = ?, cnaes_secundarios = ?, cep = ?,
                 logradouro = ?, numero = ?, complemento = ?, bairro = ?, municipio = ?, uf = ?,
-                qsa = ?, dados_cnpj_json = ?, plano = COALESCE(plano, ?),
-                status_assinatura = 'Ativa', periodo_assinatura = COALESCE(periodo_assinatura, ?),
+                qsa = ?, dados_cnpj_json = ?, plano = COALESCE(NULLIF(plano, ''), ?),
+                status_assinatura = 'Ativa',
+                periodo_assinatura = COALESCE(NULLIF(periodo_assinatura, ''), ?),
                 atualizado_em = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (
@@ -751,31 +824,41 @@ def tela_cadastro_empresa():
             )
 
     cad = sincronizar_cadastro_para_dict()
-
-    documento_valido = bool(texto_padrao(cad.get("nome"))) and bool(texto_padrao(cad.get("cnpj")))
+    oficial = objeto_oficial_empresa(cad)
+    documento_valido = bool(oficial.get("nome")) and bool(oficial.get("cnpj"))
 
     empresa_existente = None
     if documento_valido:
-        empresa_existente = empresa_existe_por_cnpj(cad.get("cnpj"))
+        empresa_existente = empresa_existe_por_cnpj(oficial.get("cnpj"))
 
         if empresa_existente and empresa_existente.get("senha_hash"):
-            atualizar_dados_oficiais_empresa_existente(cad.get("cnpj"), cad)
+            atualizar_dados_oficiais_empresa_existente(oficial.get("cnpj"), oficial)
 
             st.warning("Esta empresa já possui cadastro na GOIA.")
-            st.info("Use a aba 'Já tenho conta' para acessar. Os dados oficiais foram sincronizados no Admin GOIA.")
+            st.info("Use a aba 'Já tenho conta' para acessar.")
 
             with st.container(border=True):
                 st.markdown("### Empresa já cadastrada")
+
                 c1, c2 = st.columns(2)
                 with c1:
-                    info_card("Razão Social", cad.get("nome"))
-                    info_card("CNPJ", formatar_cnpj(cad.get("cnpj")))
+                    info_card("Razão Social", oficial.get("nome"))
+                    info_card("CNPJ", formatar_cnpj(oficial.get("cnpj")))
                 with c2:
-                    info_card("Nome Fantasia", cad.get("nome_fantasia"))
-                    info_card("Situação", cad.get("situacao_cadastral"))
+                    info_card("Nome Fantasia", oficial.get("nome_fantasia"))
+                    info_card("Situação", oficial.get("situacao_cadastral"))
+
+                c3, c4, c5 = st.columns(3)
+                with c3:
+                    info_card("Plano", empresa_existente.get("plano"))
+                with c4:
+                    info_card("Status", empresa_existente.get("status_assinatura"))
+                with c5:
+                    info_card("E-mail cadastrado", empresa_existente.get("email"))
+
             return
 
-        elif empresa_existente and not empresa_existente.get("senha_hash"):
+        if empresa_existente and not empresa_existente.get("senha_hash"):
             st.info("Este CNPJ já existe na base, mas ainda não possui senha. Complete o cadastro para ativar o acesso.")
 
     dados_json = json_cnpj_dict(cad)
@@ -786,9 +869,9 @@ def tela_cadastro_empresa():
 
         r1, r2, r3 = st.columns([2, 1, 1])
         with r1:
-            info_card("Razão Social", cad.get("nome"))
+            info_card("Razão Social", oficial.get("nome"))
         with r2:
-            info_card("CNPJ", formatar_cnpj(cad.get("cnpj")))
+            info_card("CNPJ", formatar_cnpj(oficial.get("cnpj")))
         with r3:
             info_card("Campos preenchidos pela API", campos_preenchidos)
 
@@ -796,27 +879,27 @@ def tela_cadastro_empresa():
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            info_card("Nome Fantasia", cad.get("nome_fantasia"))
+            info_card("Nome Fantasia", oficial.get("nome_fantasia"))
         with c2:
-            info_card("Situação Cadastral", cad.get("situacao_cadastral"))
+            info_card("Situação Cadastral", oficial.get("situacao_cadastral"))
         with c3:
-            info_card("Data de Abertura", data_br(cad.get("data_abertura")))
+            info_card("Data de Abertura", data_br(oficial.get("data_abertura")))
 
         c4, c5, c6 = st.columns(3)
         with c4:
-            info_card("Porte", cad.get("porte"))
+            info_card("Porte", oficial.get("porte"))
         with c5:
-            info_card("Natureza Jurídica", cad.get("natureza_juridica"))
+            info_card("Natureza Jurídica", oficial.get("natureza_juridica"))
         with c6:
-            info_card("Capital Social", formatar_capital_social(cad.get("capital_social")))
+            info_card("Capital Social", formatar_capital_social(oficial.get("capital_social")))
 
         st.write("")
-        info_card("CNAE Principal", cad.get("cnae_principal"))
+        info_card("CNAE Principal", oficial.get("cnae_principal"))
 
         with st.expander("CNAEs secundários"):
             st.text_area(
                 "CNAEs secundários",
-                value=cad.get("cnaes_secundarios") or "Não informado",
+                value=oficial.get("cnaes_secundarios") or "Não informado",
                 disabled=True,
                 height=130,
                 label_visibility="collapsed"
@@ -826,26 +909,26 @@ def tela_cadastro_empresa():
 
         e1, e2, e3 = st.columns([1, 2, 1])
         with e1:
-            info_card("CEP", formatar_cep(cad.get("cep")))
+            info_card("CEP", formatar_cep(oficial.get("cep")))
         with e2:
-            info_card("Logradouro", cad.get("logradouro"))
+            info_card("Logradouro", oficial.get("logradouro"))
         with e3:
-            info_card("Número", cad.get("numero"))
+            info_card("Número", oficial.get("numero"))
 
         e4, e5, e6, e7 = st.columns([2, 2, 2, 1])
         with e4:
-            info_card("Complemento", cad.get("complemento"))
+            info_card("Complemento", oficial.get("complemento"))
         with e5:
-            info_card("Bairro", cad.get("bairro"))
+            info_card("Bairro", oficial.get("bairro"))
         with e6:
-            info_card("Município", cad.get("municipio"))
+            info_card("Município", oficial.get("municipio"))
         with e7:
-            info_card("UF", cad.get("uf"))
+            info_card("UF", oficial.get("uf"))
 
         with st.expander("Sócios / QSA"):
             st.text_area(
                 "Sócios / QSA",
-                value=cad.get("qsa") or "Não informado",
+                value=oficial.get("qsa") or "Não informado",
                 disabled=True,
                 height=130,
                 label_visibility="collapsed"
@@ -867,7 +950,10 @@ def tela_cadastro_empresa():
         confirmar = st.text_input("Confirmar senha", type="password", key="cad_confirmar")
 
         cad = sincronizar_cadastro_para_dict()
-        valido, mensagem = validar_cadastro(cad, senha, confirmar, empresa_existente)
+        oficial = objeto_oficial_empresa(cad)
+
+        cadastro_para_validacao = {**oficial, "email": cad.get("email"), "telefone": cad.get("telefone")}
+        valido, mensagem = validar_cadastro(cadastro_para_validacao, senha, confirmar, empresa_existente)
 
         if documento_valido and not valido:
             st.warning(mensagem)
@@ -879,37 +965,20 @@ def tela_cadastro_empresa():
         )
 
     if criar:
-        dados_cadastrais = {
-            "nome_fantasia": cad.get("nome_fantasia"),
-            "situacao_cadastral": cad.get("situacao_cadastral"),
-            "data_abertura": cad.get("data_abertura"),
-            "porte": cad.get("porte"),
-            "natureza_juridica": cad.get("natureza_juridica"),
-            "capital_social": cad.get("capital_social"),
-            "cnae_principal": cad.get("cnae_principal"),
-            "cnaes_secundarios": cad.get("cnaes_secundarios"),
-            "cep": cad.get("cep"),
-            "logradouro": cad.get("logradouro"),
-            "numero": cad.get("numero"),
-            "complemento": cad.get("complemento"),
-            "bairro": cad.get("bairro"),
-            "municipio": cad.get("municipio"),
-            "uf": cad.get("uf"),
-            "qsa": cad.get("qsa"),
-            "dados_cnpj_json": cad.get("dados_cnpj_json"),
-        }
+        cad = sincronizar_cadastro_para_dict()
+        oficial = objeto_oficial_empresa(cad)
 
         ok, msg, empresa_id = criar_empresa(
-            cad.get("nome"),
-            cad.get("cnpj"),
+            oficial.get("nome"),
+            oficial.get("cnpj"),
             cad.get("email"),
             cad.get("telefone"),
             senha,
-            dados_cadastrais
+            oficial
         )
 
         if ok:
-            nome_empresa = cad.get("nome")
+            nome_empresa = oficial.get("nome")
             limpar_cadastro_session()
             st.session_state["logado"] = True
             st.session_state["empresa_id"] = empresa_id
@@ -918,6 +987,7 @@ def tela_cadastro_empresa():
             st.rerun()
         else:
             st.warning(msg)
+
 
 
 
