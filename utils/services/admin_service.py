@@ -124,3 +124,61 @@ def excluir_assinante_admin(empresa_id):
 
     conn.commit()
     conn.close()
+
+def pesquisar_assinantes(df, texto):
+
+    if df.empty:
+        return df
+
+    texto = str(texto or "").strip().lower()
+
+    if not texto:
+        return df
+
+    campos = [
+        "nome",
+        "nome_fantasia",
+        "cnpj_cpf",
+        "email",
+        "telefone",
+        "status_assinatura",
+        "plano",
+    ]
+
+    mascara = False
+
+    for campo in campos:
+        if campo in df.columns:
+            serie = df[campo].fillna("").astype(str).str.lower()
+            mascara = mascara | serie.str.contains(texto, regex=False)
+
+    return df[mascara].copy()
+
+
+def ordenar_assinantes(df):
+
+    if df.empty:
+        return df
+
+    if "nome" in df.columns:
+        return df.sort_values("nome")
+
+    return df
+
+
+def resumo_assinante(empresa):
+
+    if not empresa:
+        return {}
+
+    return {
+        "id": empresa.get("id"),
+        "empresa": empresa.get("nome"),
+        "fantasia": empresa.get("nome_fantasia"),
+        "cnpj": empresa.get("cnpj_cpf"),
+        "plano": empresa.get("plano"),
+        "status": empresa.get("status_assinatura"),
+        "email": empresa.get("email"),
+        "telefone": empresa.get("telefone"),
+    }
+
