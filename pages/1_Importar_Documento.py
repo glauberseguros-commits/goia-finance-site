@@ -13,6 +13,7 @@ from utils.auth import empresa_logada, exigir_login
 from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero
 from services.documento_service import inserir_documento_com_cursor
+from services.cliente_service import obter_ou_criar_cliente_com_cursor
 
 DB_PATH = caminho_banco()
 
@@ -983,33 +984,15 @@ def nome_entidade_valido(nome):
 
 
 def obter_ou_criar_cliente(cursor, documento, nome):
-    documento = normalizar_documento(documento)
-    nome = (nome or "").strip()
-
-    # Regra de segurança:
-    # cliente automático só pode ser criado com CPF/CNPJ válido e nome confiável.
-    # Caso contrário, o documento deve virar pendência de validação, não cadastro sujo.
-    if not documento_entidade_valido(documento):
-        return None
-
-    if not nome_entidade_valido(nome):
-        return None
-
-    cursor.execute("""
-        SELECT id FROM clientes
-        WHERE empresa_id = ? AND cnpj_cpf = ?
-    """, (EMPRESA_ID_ATIVA, documento))
-
-    row = cursor.fetchone()
-    if row:
-        return row[0]
-
-    cursor.execute("""
-        INSERT INTO clientes (empresa_id, nome, cnpj_cpf, origem_cadastro)
-        VALUES (?, ?, ?, ?)
-    """, (EMPRESA_ID_ATIVA, nome, documento, "Importação documental"))
-
-    return cursor.lastrowid
+    return obter_ou_criar_cliente_com_cursor(
+        cursor=cursor,
+        empresa_id=EMPRESA_ID_ATIVA,
+        documento=documento,
+        nome=nome,
+        normalizar_documento_fn=normalizar_documento,
+        documento_entidade_valido_fn=documento_entidade_valido,
+        nome_entidade_valido_fn=nome_entidade_valido,
+    )
 
 
 def obter_ou_criar_fornecedor(cursor, documento, nome):
