@@ -14,6 +14,7 @@ from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero
 from services.documento_service import inserir_documento_com_cursor
 from services.cliente_service import obter_ou_criar_cliente_com_cursor
+from services.fornecedor_service import obter_ou_criar_fornecedor_com_cursor
 
 DB_PATH = caminho_banco()
 
@@ -996,41 +997,15 @@ def obter_ou_criar_cliente(cursor, documento, nome):
 
 
 def obter_ou_criar_fornecedor(cursor, documento, nome):
-    documento = normalizar_documento(documento)
-    nome = (nome or "").strip()
-
-    # Regra de segurança:
-    # fornecedor automático só pode ser criado com CPF/CNPJ válido e nome confiável.
-    if not documento_entidade_valido(documento):
-        return None
-
-    if not nome_entidade_valido(nome):
-        return None
-
-    cursor.execute("""
-        SELECT id FROM fornecedores
-        WHERE empresa_id = ? AND cnpj = ?
-    """, (EMPRESA_ID_ATIVA, documento))
-
-    row = cursor.fetchone()
-    if row:
-        return row[0]
-
-    cursor.execute("""
-        INSERT INTO fornecedores (
-            empresa_id, nome, cnpj, categoria_padrao, tipo_padrao, origem_cadastro
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        EMPRESA_ID_ATIVA,
-        nome,
-        documento,
-        "A classificar",
-        "Pagar",
-        "Importação documental"
-    ))
-
-    return cursor.lastrowid
+    return obter_ou_criar_fornecedor_com_cursor(
+        cursor=cursor,
+        empresa_id=EMPRESA_ID_ATIVA,
+        documento=documento,
+        nome=nome,
+        normalizar_documento_fn=normalizar_documento,
+        documento_entidade_valido_fn=documento_entidade_valido,
+        nome_entidade_valido_fn=nome_entidade_valido,
+    )
 
 
 def obter_ou_criar_produto(cursor, descricao, custo=0, preco_venda=0):
