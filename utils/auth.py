@@ -34,3 +34,25 @@ def validar_sessao_empresa():
     st.session_state["empresa_nome"] = empresa.get("nome") or "Empresa"
 
     return int(empresa_id)
+
+def empresa_logada():
+    """
+    Compatibilidade com páginas antigas.
+    Retorna o ID da empresa ativa na sessão.
+    """
+    return validar_sessao_empresa()
+
+
+def exigir_login():
+    """
+    Compatibilidade com páginas antigas.
+    Interrompe a execução se não houver empresa logada.
+    """
+    empresa_id = validar_sessao_empresa()
+
+    if not empresa_id:
+        st.warning("Faça login para acessar esta página.")
+        st.stop()
+
+    return empresa_id
+
