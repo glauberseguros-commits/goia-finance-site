@@ -5,6 +5,7 @@ from utils.services.admin_service import (
     alterar_status_assinante,
     alterar_plano_assinante,
     excluir_assinante_admin,
+    listar_auditoria_admin,
 )
 
 class AdminController:
@@ -37,3 +38,7 @@ class AdminController:
     @staticmethod
     def excluir(empresa_id):
         excluir_assinante_admin(empresa_id)
+
+    @staticmethod
+    def auditoria(limite=100):
+        return listar_auditoria_admin(limite)
