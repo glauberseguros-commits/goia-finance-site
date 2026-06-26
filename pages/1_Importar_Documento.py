@@ -12,6 +12,7 @@ from pypdf import PdfReader
 from utils.auth import empresa_logada, exigir_login
 from utils.ui import aplicar_estilo_premium
 from utils.premium import aplicar_premium_goia, hero
+from services.documento_service import inserir_documento_com_cursor
 
 DB_PATH = caminho_banco()
 
@@ -1390,35 +1391,24 @@ def salvar_documento_erp(nome_arquivo, texto, analise):
             "acoes": acoes
         }
 
-    cur.execute("""
-        INSERT INTO documentos (
-            nome_arquivo, tipo_documento, direcao,
-            cnpj_emitente, nome_emitente, cnpj_destinatario, nome_destinatario,
-            valor, data_emissao, data_vencimento,
-            status_processamento, texto_extraido, empresa_id,
-            chave_acesso_nfe, numero_nfe, serie_nfe
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        nome_arquivo,
-        tipo,
-        direcao,
-        cnpj_emitente,
-        nome_emitente,
-        cnpj_destinatario,
-        nome_destinatario,
-        valor,
-        analise.get("data_emissao"),
-        analise.get("data_vencimento"),
-        "Processado",
-        texto,
-        EMPRESA_ID_ATIVA,
-        analise.get("chave_acesso_nfe") or "",
-        analise.get("numero_nfe") or "",
-        analise.get("serie_nfe") or ""
-    ))
-
-    documento_id = cur.lastrowid
+    documento_id = inserir_documento_com_cursor(cur,
+        nome_arquivo=nome_arquivo,
+        tipo_documento=tipo,
+        direcao=direcao,
+        cnpj_emitente=cnpj_emitente,
+        nome_emitente=nome_emitente,
+        cnpj_destinatario=cnpj_destinatario,
+        nome_destinatario=nome_destinatario,
+        valor=valor,
+        data_emissao=analise.get("data_emissao"),
+        data_vencimento=analise.get("data_vencimento"),
+        status_processamento="Processado",
+        texto_extraido=texto,
+        empresa_id=EMPRESA_ID_ATIVA,
+        chave_acesso_nfe=analise.get("chave_acesso_nfe") or "",
+        numero_nfe=analise.get("numero_nfe") or "",
+        serie_nfe=analise.get("serie_nfe") or "",
+    )
     repositorio_id = registrar_no_repositorio_documental(cur, documento_id, nome_arquivo, analise)
     conta_receber_id = None
     conta_pagar_id = None

@@ -15,25 +15,51 @@ def conectar():
     return conn
 
 
+def buscar_documento_por_chave_com_cursor(
+    cursor: sqlite3.Cursor,
+    empresa_id: int,
+    chave_acesso: str,
+):
+    cursor.execute(
+        """
+        SELECT *
+        FROM documentos
+        WHERE empresa_id = ?
+          AND chave_acesso_nfe = ?
+        LIMIT 1
+        """,
+        (empresa_id, chave_acesso),
+    )
+
+    return cursor.fetchone()
+
+
 def buscar_documento_por_chave(
     empresa_id: int,
     chave_acesso: str,
 ):
     with conectar() as conn:
         cur = conn.cursor()
+        return buscar_documento_por_chave_com_cursor(cur, empresa_id, chave_acesso)
 
-        cur.execute(
-            """
-            SELECT *
-            FROM documentos
-            WHERE empresa_id = ?
-              AND chave_acesso_nfe = ?
-            LIMIT 1
-            """,
-            (empresa_id, chave_acesso),
-        )
 
-        return cur.fetchone()
+def buscar_documento_por_hash_com_cursor(
+    cursor: sqlite3.Cursor,
+    empresa_id: int,
+    hash_arquivo: str,
+):
+    cursor.execute(
+        """
+        SELECT *
+        FROM documentos
+        WHERE empresa_id = ?
+          AND hash_arquivo = ?
+        LIMIT 1
+        """,
+        (empresa_id, hash_arquivo),
+    )
+
+    return cursor.fetchone()
 
 
 def buscar_documento_por_hash(
@@ -42,26 +68,10 @@ def buscar_documento_por_hash(
 ):
     with conectar() as conn:
         cur = conn.cursor()
-
-        cur.execute(
-            """
-            SELECT *
-            FROM documentos
-            WHERE empresa_id = ?
-              AND hash_arquivo = ?
-            LIMIT 1
-            """,
-            (empresa_id, hash_arquivo),
-        )
-
-        return cur.fetchone()
+        return buscar_documento_por_hash_com_cursor(cur, empresa_id, hash_arquivo)
 
 
-def inserir_documento(**dados: Any):
-
-    colunas = ", ".join(dados.keys())
-    placeholders = ", ".join(["?"] * len(dados))
-
+def _normalizar_valores_sql(dados: dict[str, Any]) -> list[Any]:
     valores = []
 
     for valor in dados.values():
@@ -70,22 +80,33 @@ def inserir_documento(**dados: Any):
         else:
             valores.append(valor)
 
+    return valores
+
+
+def inserir_documento_com_cursor(cursor: sqlite3.Cursor, **dados: Any):
+    colunas = ", ".join(dados.keys())
+    placeholders = ", ".join(["?"] * len(dados))
+    valores = _normalizar_valores_sql(dados)
+
+    cursor.execute(
+        f"""
+        INSERT INTO documentos
+        ({colunas})
+        VALUES
+        ({placeholders})
+        """,
+        valores,
+    )
+
+    return cursor.lastrowid
+
+
+def inserir_documento(**dados: Any):
     with conectar() as conn:
         cur = conn.cursor()
-
-        cur.execute(
-            f"""
-            INSERT INTO documentos
-            ({colunas})
-            VALUES
-            ({placeholders})
-            """,
-            valores,
-        )
-
+        documento_id = inserir_documento_com_cursor(cur, **dados)
         conn.commit()
-
-        return cur.lastrowid
+        return documento_id
 
 
 def atualizar_documento(documento_id: int, **dados: Any):
@@ -120,15 +141,16 @@ def atualizar_documento(documento_id: int, **dados: Any):
         conn.commit()
 
 
+def obter_documento_com_cursor(cursor: sqlite3.Cursor, documento_id: int):
+    cursor.execute(
+        "SELECT * FROM documentos WHERE id=?",
+        (documento_id,),
+    )
+
+    return cursor.fetchone()
+
+
 def obter_documento(documento_id: int):
-
     with conectar() as conn:
-
         cur = conn.cursor()
-
-        cur.execute(
-            "SELECT * FROM documentos WHERE id=?",
-            (documento_id,),
-        )
-
-        return cur.fetchone()
+        return obter_documento_com_cursor(cur, documento_id)
