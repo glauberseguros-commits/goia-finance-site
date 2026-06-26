@@ -3,13 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from pathlib import Path
+
+from utils.db import conectar_banco
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from pathlib import Path
 from typing import Any
-
-
-DB_PATH = Path("bd/gofinance.db")
 
 
 @dataclass
@@ -27,7 +26,7 @@ class ResultadoProcessamento:
 
 
 def conectar() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = conectar_banco()
     conn.row_factory = sqlite3.Row
     return conn
 
