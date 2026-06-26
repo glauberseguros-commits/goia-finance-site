@@ -5,14 +5,11 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 import streamlit as st
-from controllers.admin_controller import AdminController
 
 from utils.db import conectar_banco, caminho_banco
 from utils.repositories.empresas import listar_empresas
 from utils.schema import inicializar_schema_goia
 
-
-ADMIN = AdminController()
 
 st.set_page_config(
     page_title="Admin GOIA",
@@ -1030,7 +1027,6 @@ def painel_integridade_admin_goia():
     import sqlite3
     import pandas as pd
     import streamlit as st
-from controllers.admin_controller import AdminController
     from pathlib import Path
     from utils.db import caminho_banco
 
@@ -1126,8 +1122,3 @@ from controllers.admin_controller import AdminController
 # O Admin passará gradualmente a utilizar os repositórios
 # ao invés de SQL direto.
 _empresas_repository = listar_empresas
-
-
-# GOIA_CONTROLLER_READY
-# A partir desta versão a página Admin passará a consumir
-# gradualmente o AdminController em substituição às funções locais.
