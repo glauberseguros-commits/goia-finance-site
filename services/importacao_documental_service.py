@@ -49,6 +49,53 @@ class ImportacaoDocumentalService:
             **kwargs,
         )
 
+    def verificar_documento_existente(
+        self,
+        chave_acesso_nfe: str,
+        nome_arquivo: str,
+        cnpj_emitente: str,
+        cnpj_destinatario: str,
+    ):
+        if chave_acesso_nfe:
+            self.cursor.execute(
+                """
+                SELECT id
+                FROM documentos
+                WHERE empresa_id = ?
+                  AND chave_acesso_nfe = ?
+                LIMIT 1
+                """,
+                (
+                    self.empresa_id,
+                    chave_acesso_nfe,
+                ),
+            )
+        else:
+            self.cursor.execute(
+                """
+                SELECT id
+                FROM documentos
+                WHERE empresa_id = ?
+                  AND nome_arquivo = ?
+                  AND IFNULL(cnpj_emitente,'') = ?
+                  AND IFNULL(cnpj_destinatario,'') = ?
+                LIMIT 1
+                """,
+                (
+                    self.empresa_id,
+                    nome_arquivo,
+                    cnpj_emitente or "",
+                    cnpj_destinatario or "",
+                ),
+            )
+
+        row = self.cursor.fetchone()
+
+        if row:
+            return row[0]
+
+        return None
+
     def processar(
         self,
         nome_arquivo: str,
