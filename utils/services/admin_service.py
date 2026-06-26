@@ -182,3 +182,73 @@ def resumo_assinante(empresa):
         "telefone": empresa.get("telefone"),
     }
 
+
+
+def garantir_tabela_auditoria_admin():
+    conn = conectar_banco()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS auditoria_admin (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario TEXT,
+            acao TEXT NOT NULL,
+            empresa_id INTEGER,
+            detalhes TEXT,
+            resultado TEXT,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+def registrar_auditoria_admin(
+    acao,
+    empresa_id=None,
+    usuario="Admin GOIA",
+    detalhes="",
+    resultado="OK",
+):
+    garantir_tabela_auditoria_admin()
+
+    conn = conectar_banco()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO auditoria_admin (
+            usuario,
+            acao,
+            empresa_id,
+            detalhes,
+            resultado
+        )
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        usuario,
+        acao,
+        empresa_id,
+        detalhes,
+        resultado,
+    ))
+
+    conn.commit()
+    conn.close()
+
+
+def listar_auditoria_admin(limite=100):
+    garantir_tabela_auditoria_admin()
+
+    return _df("""
+        SELECT
+            criado_em,
+            usuario,
+            acao,
+            empresa_id,
+            detalhes,
+            resultado
+        FROM auditoria_admin
+        ORDER BY id DESC
+        LIMIT ?
+    """, (limite,))
