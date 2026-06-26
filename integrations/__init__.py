@@ -1,0 +1,3 @@
+"""
+Integrações externas da GOIA.
+"""

@@ -1,0 +1,1 @@
+# Futuro suporte a JWT.
