@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from utils.db import conectar_banco, caminho_banco
+from utils.repositories.empresas import listar_empresas
 from utils.schema import inicializar_schema_goia
 
 
@@ -1115,3 +1116,9 @@ def painel_integridade_admin_goia():
         st.warning("O banco está em caminho diferente do padrão esperado. Validar configuração.")
 
     conn.close()
+
+
+# GOIA_REPOSITORY_READY
+# O Admin passará gradualmente a utilizar os repositórios
+# ao invés de SQL direto.
+_empresas_repository = listar_empresas
