@@ -1020,3 +1020,98 @@ elif pagina == "Diagnóstico":
     pagina_diagnostico(empresas)
 
 st.caption("GOIA · Área Master da plataforma")
+
+def painel_integridade_admin_goia():
+    import os
+    import sqlite3
+    import pandas as pd
+    import streamlit as st
+    from pathlib import Path
+    from utils.db import caminho_banco
+
+    st.markdown("## Diagnóstico operacional GOIA")
+
+    db_path = caminho_banco()
+    bd_local = Path("bd/gofinance.db")
+
+    st.markdown("### Banco em uso")
+
+    dados_banco = pd.DataFrame([
+        {"Item": "GOIA_DB_PATH", "Valor": os.getenv("GOIA_DB_PATH", "Não configurado")},
+        {"Item": "Banco ativo", "Valor": str(db_path)},
+        {"Item": "Banco ativo existe", "Valor": "Sim" if db_path.exists() else "Não"},
+        {"Item": "Pasta do banco existe", "Valor": "Sim" if db_path.parent.exists() else "Não"},
+        {"Item": "bd/gofinance.db existe", "Valor": "Sim" if bd_local.exists() else "Não"},
+        {"Item": "Banco ativo absoluto", "Valor": str(db_path.resolve())},
+    ])
+
+    st.dataframe(dados_banco, use_container_width=True, hide_index=True)
+
+    if not db_path.exists():
+        st.error("Banco ativo não existe. O sistema pode estar recriando base vazia.")
+        return
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    st.markdown("### Tabelas encontradas")
+    tabelas = pd.read_sql_query("""
+        SELECT name AS tabela
+        FROM sqlite_master
+        WHERE type='table'
+        ORDER BY name
+    """, conn)
+
+    st.dataframe(tabelas, use_container_width=True, hide_index=True)
+
+    st.markdown("### Contagem por tabela")
+
+    linhas = []
+    for tabela in tabelas["tabela"].tolist():
+        try:
+            qtd = cur.execute(f"SELECT COUNT(*) FROM {tabela}").fetchone()[0]
+            linhas.append({"Tabela": tabela, "Registros": qtd})
+        except Exception as e:
+            linhas.append({"Tabela": tabela, "Registros": f"Erro: {e}"})
+
+    st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+
+    st.markdown("### Assinantes / Empresas")
+
+    try:
+        empresas = pd.read_sql_query("""
+            SELECT
+                id,
+                nome,
+                nome_fantasia,
+                cnpj_cpf,
+                email,
+                telefone,
+                plano,
+                status_assinatura,
+                data_inicio_assinatura,
+                data_fim_assinatura,
+                criado_em,
+                atualizado_em
+            FROM empresas
+            ORDER BY id DESC
+        """, conn)
+
+        if empresas.empty:
+            st.warning("Nenhum assinante cadastrado na tabela empresas.")
+        else:
+            st.dataframe(empresas, use_container_width=True, hide_index=True)
+
+    except Exception as e:
+        st.error(f"Erro ao ler empresas: {e}")
+
+    st.markdown("### Risco identificado")
+
+    if str(db_path).replace("\\", "/") == "bd/gofinance.db":
+        st.error("O sistema está usando bd/gofinance.db. Em produção Render, isso não é persistente.")
+    elif str(db_path).replace("\\", "/").startswith("/data/"):
+        st.success("O sistema está apontando para /data. Este é o caminho correto para persistência no Render.")
+    else:
+        st.warning("O banco está em caminho diferente do padrão esperado. Validar configuração.")
+
+    conn.close()
