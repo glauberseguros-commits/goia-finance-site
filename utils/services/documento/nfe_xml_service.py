@@ -7,6 +7,8 @@ em um dicionário padronizado da GOIA.
 
 from xml.etree import ElementTree as ET
 
+from schemas.documento_fiscal_schema import DocumentoFiscalDTO, PessoaFiscalDTO, ItemFiscalDTO
+
 
 NS = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
 
@@ -66,3 +68,37 @@ def ler_nfe_xml(xml_bytes):
         })
 
     return dados
+
+
+
+def ler_nfe_xml_dto(xml_bytes):
+    dados = ler_nfe_xml(xml_bytes)
+
+    doc = DocumentoFiscalDTO(
+        numero=dados.get("numero", ""),
+        serie=dados.get("serie", ""),
+        data_emissao=dados.get("data_emissao", ""),
+        emitente=PessoaFiscalDTO(
+            cnpj=dados.get("emitente", {}).get("cnpj", ""),
+            nome=dados.get("emitente", {}).get("nome", ""),
+        ),
+        destinatario=PessoaFiscalDTO(
+            cnpj=dados.get("destinatario", {}).get("cnpj", ""),
+            cpf=dados.get("destinatario", {}).get("cpf", ""),
+            nome=dados.get("destinatario", {}).get("nome", ""),
+        ),
+        valor_total=dados.get("valor_total", 0.0),
+    )
+
+    for item in dados.get("itens", []):
+        doc.itens.append(ItemFiscalDTO(
+            codigo=item.get("codigo", ""),
+            descricao=item.get("descricao", ""),
+            ncm=item.get("ncm", ""),
+            cfop=item.get("cfop", ""),
+            quantidade=item.get("quantidade", 0.0),
+            valor_unitario=item.get("valor_unitario", 0.0),
+            valor_total=item.get("valor_total", 0.0),
+        ))
+
+    return doc
