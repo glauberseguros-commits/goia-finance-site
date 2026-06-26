@@ -1,0 +1,1 @@
+# Schemas/DTOs da GOIA.
