@@ -56,6 +56,10 @@ def somente_numeros(valor):
 
 
 def normalizar_documento(valor):
+    return somente_numeros(valor)
+
+
+def formatar_documento(valor):
     n = somente_numeros(valor)
     if len(n) == 14:
         return f"{n[:2]}.{n[2:5]}.{n[5:8]}/{n[8:12]}-{n[12:]}"
@@ -86,7 +90,7 @@ def obter_empresa_logada():
         return "", ""
 
     nome, doc = row
-    return nome or "", normalizar_documento(doc)
+    return nome or "", formatar_documento(doc)
 
 
 NOME_EMPRESA_LOGADA, DOC_EMPRESA_LOGADA = obter_empresa_logada()
