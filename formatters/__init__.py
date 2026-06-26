@@ -1,0 +1,1 @@
+# Formatadores centrais da GOIA.
