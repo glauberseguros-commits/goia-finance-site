@@ -98,6 +98,13 @@ def alterar_status_assinante(empresa_id, status, motivo=""):
     conn.commit()
     conn.close()
 
+    registrar_auditoria_admin(
+        acao=f"Alteração de status para {status}",
+        empresa_id=empresa_id,
+        detalhes=motivo,
+        resultado="OK",
+    )
+
 
 def alterar_plano_assinante(empresa_id, plano, data_inicio=None, data_fim=None):
     conn = conectar_banco()
@@ -115,6 +122,13 @@ def alterar_plano_assinante(empresa_id, plano, data_inicio=None, data_fim=None):
     conn.commit()
     conn.close()
 
+    registrar_auditoria_admin(
+        acao=f"Alteração de plano para {plano}",
+        empresa_id=empresa_id,
+        detalhes=f"Início={data_inicio or ''}; Fim={data_fim or ''}",
+        resultado="OK",
+    )
+
 
 def excluir_assinante_admin(empresa_id):
     conn = conectar_banco()
@@ -124,6 +138,13 @@ def excluir_assinante_admin(empresa_id):
 
     conn.commit()
     conn.close()
+
+    registrar_auditoria_admin(
+        acao="Exclusão física de assinante",
+        empresa_id=empresa_id,
+        detalhes="Registro removido da tabela empresas",
+        resultado="OK",
+    )
 
 def pesquisar_assinantes(df, texto):
 
