@@ -8,6 +8,7 @@ from controllers.documento_validacao_controller import DocumentoValidacaoControl
 
 
 def test_documento_validacao():
+    assert DocumentoValidacaoController.cnpj("28.860.122/0001-77") is True
     assert DocumentoValidacaoController.cnpj("11.222.333/0001-81") is True
     assert DocumentoValidacaoController.cnpj("11.111.111/1111-11") is False
     assert DocumentoValidacaoController.cpf("111.111.111-11") is False

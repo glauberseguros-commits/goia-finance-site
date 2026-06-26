@@ -7,20 +7,28 @@ Centraliza validações de CPF/CNPJ usadas pelo importador documental.
 from utils.services.documento.texto_service import somente_numeros
 
 
+
 def validar_cnpj(valor):
     cnpj = somente_numeros(valor)
 
-    if len(cnpj) != 14 or cnpj == cnpj[0] * 14:
+    if len(cnpj) != 14:
         return False
 
-    def calc(digs):
-        pesos = list(range(len(digs) - 7, 1, -1))
-        soma = sum(int(d) * p for d, p in zip(digs, pesos))
+    if cnpj == cnpj[0] * 14:
+        return False
+
+    def calcular_digito(numeros, pesos):
+        soma = sum(int(n) * p for n, p in zip(numeros, pesos))
         resto = soma % 11
-        return "0" if resto < 2 else str(11 - resto)
+        return 0 if resto < 2 else 11 - resto
 
-    return cnpj[-2:] == calc(cnpj[:12]) + calc(cnpj[:13])
+    pesos1 = [5,4,3,2,9,8,7,6,5,4,3,2]
+    pesos2 = [6,5,4,3,2,9,8,7,6,5,4,3,2]
 
+    dig1 = calcular_digito(cnpj[:12], pesos1)
+    dig2 = calcular_digito(cnpj[:12] + str(dig1), pesos2)
+
+    return cnpj[-2:] == f"{dig1}{dig2}"
 
 def validar_cpf(valor):
     cpf = somente_numeros(valor)
